@@ -31,16 +31,30 @@ if %errorlevel% equ 0 (
 echo.
 
 :: --- Step 1: Check for Python and Launch ---
+set "PYTHON_CMD="
 python --version >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [ERROR] Python not found.
+if !errorlevel! equ 0 (
+    set "PYTHON_CMD=python"
+) else (
+    py --version >nul 2>nul
+    if !errorlevel! equ 0 (
+        set "PYTHON_CMD=py"
+    )
+)
+
+if "!PYTHON_CMD!"=="" (
+    echo [ERROR] Python not found (checked 'python' and 'py').
     echo Please run INSTALL.bat first to set up all necessary components.
     pause
     exit /b
 )
 
 echo Launching Yuuka OCR...
-start "Yuuka OCR" /B pythonw.exe main.py
+set "PYTHONW_CMD=pythonw.exe"
+if "!PYTHON_CMD!"=="py" (
+    set "PYTHONW_CMD=pyw.exe"
+)
+start "Yuuka OCR" /B !PYTHONW_CMD! main.py
 
 endlocal
 exit /b

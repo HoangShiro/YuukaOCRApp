@@ -24,7 +24,6 @@ if %errorlevel% neq 0 (
 
             if "!LOCAL_HASH!" neq "!REMOTE_HASH!" (
                 echo   New version available! Forcing update to match the repository...
-                :: Lenh nay se cap nhat cac file duoc theo doi va bo qua cac file khong duoc theo doi
                 git reset --hard origin/main >nul
                 if !errorlevel! neq 0 (
                     echo     [ERROR] Update failed. Please check Git setup or report an issue.
@@ -45,13 +44,23 @@ echo.
 
 :: --- Step 1: Check for Python ---
 echo Yuuka: Checking for Python installation...
+set "PYTHON_CMD="
 python --version >nul 2>nul
-if %errorlevel% neq 0 (
-    echo   [ERROR] Python is not installed or not in PATH. Please install Python 3.
+if !errorlevel! equ 0 (
+    set "PYTHON_CMD=python"
+) else (
+    py --version >nul 2>nul
+    if !errorlevel! equ 0 (
+        set "PYTHON_CMD=py"
+    )
+)
+
+if "!PYTHON_CMD!"=="" (
+    echo   [ERROR] Python is not installed or not in PATH (checked 'python' and 'py').
     pause
     exit /b
 )
-echo   Python is ready!
+echo   Python found using '!PYTHON_CMD!' command.
 echo.
 
 :: --- Step 2: Install Dependencies ---
@@ -61,9 +70,9 @@ if not exist "requirements.txt" (
     pause
     exit /b
 )
-python -m pip install -r requirements.txt
+!PYTHON_CMD! -m pip install -r requirements.txt
 if !errorlevel! neq 0 (
-    echo   [ERROR] Failed to install libraries. Please check internet connection or try running as Administrator.
+    echo   [ERROR] Failed to install libraries. Please check internet or run as Administrator.
     pause
     exit /b
 )
@@ -74,7 +83,11 @@ echo.
 echo Yuuka: All set! Launching the application...
 echo (This window will close automatically)
 
-start "Yuuka OCR" /B pythonw.exe main.py
+set "PYTHONW_CMD=pythonw.exe"
+if "!PYTHON_CMD!"=="py" (
+    set "PYTHONW_CMD=pyw.exe"
+)
+start "Yuuka OCR" /B !PYTHONW_CMD! main.py
 
 endlocal
 exit /b
