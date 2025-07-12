@@ -32,35 +32,46 @@ def run_command(command):
 
 def check_for_updates():
     """
-    Chỉ kiểm tra xem có bản cập nhật hay không.
-    Trả về một status code từ UPDATE_STATUS và một thông báo.
+    Kiểm tra xem có bản cập nhật hay không.
+    Trả về một tuple: (status_code, message, commit_details).
+    commit_details là một dict {'message': str, 'date': str} hoặc None.
     """
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if not os.path.isdir(os.path.join(project_root, '.git')):
-        return UPDATE_STATUS["NOT_A_GIT_REPO"], "Đây không phải là một repo Git."
+        return UPDATE_STATUS["NOT_A_GIT_REPO"], "Đây không phải là một repo Git.", None
 
     if run_command(['git', '--version']).returncode != 0:
-        return UPDATE_STATUS["GIT_NOT_FOUND"], "Không tìm thấy Git trên hệ thống."
+        return UPDATE_STATUS["GIT_NOT_FOUND"], "Không tìm thấy Git trên hệ thống.", None
     
     fetch_result = run_command(['git', 'fetch', 'origin'])
     if fetch_result.returncode != 0:
-        return UPDATE_STATUS["FETCH_FAILED"], f"Lỗi khi fetch: {fetch_result.stderr.strip()}"
+        return UPDATE_STATUS["FETCH_FAILED"], f"Lỗi khi fetch: {fetch_result.stderr.strip()}", None
 
     local_hash = run_command(['git', 'rev-parse', 'HEAD']).stdout.strip()
     remote_hash = run_command(['git', 'rev-parse', 'origin/main']).stdout.strip()
     
     if not local_hash or not remote_hash:
-        return UPDATE_STATUS["ERROR"], "Không thể lấy thông tin commit."
+        return UPDATE_STATUS["ERROR"], "Không thể lấy thông tin commit.", None
 
     if local_hash == remote_hash:
-        return UPDATE_STATUS["UP_TO_DATE"], "Bạn đang ở phiên bản mới nhất."
+        return UPDATE_STATUS["UP_TO_DATE"], "Bạn đang ở phiên bản mới nhất.", None
     else:
-        # Kiểm tra xem remote có phải là cha của local không (để chắc chắn đây là update chứ ko phải diverge)
         is_ancestor = run_command(['git', 'merge-base', '--is-ancestor', 'HEAD', 'origin/main'])
         if is_ancestor.returncode == 0:
-             return UPDATE_STATUS["AHEAD"], "Có phiên bản mới! Sẵn sàng cập nhật."
+            # Có update, lấy thông tin commit mới nhất từ remote
+            commit_message_res = run_command(['git', 'log', '-1', '--pretty=%B', 'origin/main'])
+            commit_date_res = run_command(['git', 'log', '-1', '--pretty=%ci', 'origin/main'])
+
+            if commit_message_res.returncode == 0 and commit_date_res.returncode == 0:
+                commit_details = {
+                    "message": commit_message_res.stdout.strip(),
+                    "date": commit_date_res.stdout.strip()
+                }
+                return UPDATE_STATUS["AHEAD"], "Có phiên bản mới! Sẵn sàng cập nhật.", commit_details
+            else:
+                return UPDATE_STATUS["AHEAD"], "Có phiên bản mới! (Không lấy được chi tiết).", None
         else:
-             return UPDATE_STATUS["UP_TO_DATE"], "Repo đã bị thay đổi. Vui lòng cập nhật thủ công."
+             return UPDATE_STATUS["UP_TO_DATE"], "Repo đã bị thay đổi. Vui lòng cập nhật thủ công.", None
 
 
 def perform_update():

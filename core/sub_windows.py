@@ -188,7 +188,7 @@ class ConfigWindow(PhysicsMovableWidget):
     apiKeySubmitted = Signal(str)
     uiImageChanged = Signal(str)
     requestRestart = Signal()
-    updateCheckCompleted = Signal(int, str)
+    updateCheckCompleted = Signal(int, str, object)
 
     def __init__(self, parent=None, physics_config=None):
         super().__init__(parent, physics_config)
@@ -267,7 +267,6 @@ class ConfigWindow(PhysicsMovableWidget):
         # --- Cột trái ---
         left = QVBoxLayout()
         
-        # Group Cài đặt chung
         general_group = QGroupBox("Cài đặt chung")
         general_layout = QVBoxLayout()
         self.auto_update_cb = QCheckBox("Tự động update khi khởi động")
@@ -286,9 +285,18 @@ class ConfigWindow(PhysicsMovableWidget):
         update_layout = QVBoxLayout()
         self.update_status_label = QLabel("Đang kiểm tra...")
         self.update_status_label.setWordWrap(True)
+
+        self.update_details_label = QLabel("")
+        self.update_details_label.setWordWrap(True)
+        self.update_details_label.setObjectName("updateDetailsLabel")
+        self.update_details_label.hide()
+        
         self.update_button = QPushButton("Cập nhật & Khởi động lại")
-        self.update_button.hide() # Ẩn ban đầu
+        self.update_button.hide()
+        
         update_layout.addWidget(self.update_status_label)
+        update_layout.addWidget(self.update_details_label)
+        update_layout.addSpacing(5)
         update_layout.addWidget(self.update_button)
         update_group.setLayout(update_layout)
         left.addWidget(update_group)
@@ -450,6 +458,14 @@ class ConfigWindow(PhysicsMovableWidget):
             #separator_line {{ color: {QColor(accent_color).lighter(120).name(QColor.NameFormat.HexArgb)}; }}
             #dropZone {{ border: 2px dashed {accent_color}88; border-radius: 5px; padding: 10px; color: {text_color}aa; }}
             #uiPreview {{ border: none; padding: 5px; margin-top: 5px; color: {text_color}aa; }}
+            #updateDetailsLabel {{
+                background-color: rgba(0,0,0,0.15);
+                border: 1px solid {accent_color}44;
+                border-radius: 5px;
+                padding: 8px;
+                margin-top: 5px;
+                color: {text_color}cc;
+            }}
             
             QGroupBox {{ border: 1px solid {accent_color}66; border-radius: 5px; margin-top: 1ex; color: {text_color}; font-weight: bold; padding: 5px; }}
             QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top center; padding: 0 3px; background-color: {bg_color_str}; }}
@@ -491,25 +507,38 @@ class ConfigWindow(PhysicsMovableWidget):
 
     def _run_update_check_in_thread(self):
         """Chạy check_for_updates trong thread riêng để không block UI."""
-        status, message = update.check_for_updates()
-        self.updateCheckCompleted.emit(status, message)
+        status, message, details = update.check_for_updates()
+        self.updateCheckCompleted.emit(status, message, details)
         
-    def _on_update_check_completed(self, status, message):
+    def _on_update_check_completed(self, status, message, details):
         """Slot xử lý kết quả khi thread check update hoàn thành."""
         self.update_status_label.setText(message)
+
         if status == update.UPDATE_STATUS['AHEAD']:
             self.update_button.show()
             self.update_button.setEnabled(True)
+            if details:
+                commit_msg = details.get('message', 'N/A').replace('<', '<').replace('>', '>')
+                commit_date = details.get('date', 'N/A')
+                details_text = f"""
+                <p><b>Nội dung cập nhật:</b><br/>
+                {commit_msg.replace(os.linesep, '<br/>')}</p>
+                <p><b>Thời gian:</b> {commit_date}</p>
+                """
+                self.update_details_label.setText(details_text)
+                self.update_details_label.show()
         else:
+            self.update_details_label.hide()
+            self.update_details_label.setText("")
             self.update_button.hide()
 
     def _on_update_button_clicked(self):
         """Slot xử lý khi người dùng nhấn nút update."""
         self.update_status_label.setText("Đang cập nhật... Vui lòng không tắt Yuuka nhé!")
         self.update_button.setEnabled(False)
-        QApplication.processEvents() # Cập nhật UI ngay lập tức
+        self.update_details_label.hide()
+        QApplication.processEvents()
 
-        # Chạy update và restart trong thread riêng
         def update_and_restart_thread():
             update.perform_update()
             self.requestRestart.emit()
@@ -606,6 +635,7 @@ class ConfigWindow(PhysicsMovableWidget):
         
         self.update_status_label.setText("Đang kiểm tra update...")
         self.update_button.hide()
+        self.update_details_label.hide()
         threading.Thread(target=self._run_update_check_in_thread, daemon=True).start()
 
     def update_ui_preview(self, pixmap: QPixmap):
