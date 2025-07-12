@@ -491,7 +491,9 @@ class MainWindow(PhysicsMovableWidget):
     def _perform_reset_status(self):
         if self.is_processing_request or self.notification_window.isVisible(): return
         hotkey = self.user_config.get('hook_ocr_hotkey', 'phím tắt').upper()
-        if self.is_api_key_needed: self.update_status("Copy Gemini API key đi~")
+        if self.is_api_key_needed:
+            self.update_status("Waking up...") # Dòng này giúp fix lỗi thông báo cần API key không hiển thị.
+            self.update_status("Copy Gemini API key đi~")
         elif self.is_hooked: self.update_status(f"Nhấn '{hotkey}' để OCR.")
         elif self.user_config.get('process_text_clipboard', False): self.update_status("Yuuka: Copy text đi~")
         elif self.user_config.get('prompt_enabled', False): self.update_status("Yuuka: Prompt mode on!")
