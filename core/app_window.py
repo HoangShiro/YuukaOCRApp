@@ -544,6 +544,10 @@ class MainWindow(PhysicsMovableWidget):
         self.hooked_win_rect_physical = rect_physical; self._reset_roi_state()
         if self.config_window.isVisible(): self.config_window.hide()
         
+        # YUUKA FIX: Ẩn thông báo hiện tại để đảm bảo reset_status() có thể đặt thông báo mới
+        if self.notification_window.isVisible():
+            self.notification_window.hide()
+
         dpi = get_screen_dpi_ratio(QPoint(rect_physical[0], rect_physical[1]))
         target_x = self.pos().x()
         if edge == 'top':
