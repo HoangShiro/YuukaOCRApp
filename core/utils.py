@@ -70,7 +70,7 @@ def set_startup_status(enabled: bool):
     try:
         # Lấy đường dẫn tuyệt đối tới file RUN.bat trong thư mục gốc của project
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        run_bat_path = os.path.join(project_root, "RUN.bat")
+        run_bat_path = os.path.join(project_root, "YuukaOCR.bat")
 
         if not os.path.exists(run_bat_path):
             print(f"Yuuka Startup: Lỗi - Không tìm thấy file '{run_bat_path}' để cấu hình startup.")
