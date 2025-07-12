@@ -53,25 +53,28 @@ def check_for_updates():
     if not local_hash or not remote_hash:
         return UPDATE_STATUS["ERROR"], "Không thể lấy thông tin commit.", None
 
+    def get_commit_details(ref='HEAD'):
+        """Lấy thông tin commit cho một ref cụ thể (mặc định là HEAD)."""
+        try:
+            commit_message_res = run_command(['git', 'log', '-1', '--pretty=%B', ref])
+            commit_date_res = run_command(['git', 'log', '-1', '--pretty=%ci', ref])
+            if commit_message_res.returncode == 0 and commit_date_res.returncode == 0:
+                return {"message": commit_message_res.stdout.strip(), "date": commit_date_res.stdout.strip()}
+        except Exception:
+            return None
+        return None
+
     if local_hash == remote_hash:
-        return UPDATE_STATUS["UP_TO_DATE"], "Bạn đang ở phiên bản mới nhất.", None
+        details = get_commit_details('HEAD')
+        return UPDATE_STATUS["UP_TO_DATE"], "Bạn đang ở phiên bản mới nhất.", details
     else:
         is_ancestor = run_command(['git', 'merge-base', '--is-ancestor', 'HEAD', 'origin/main'])
         if is_ancestor.returncode == 0:
-            # Có update, lấy thông tin commit mới nhất từ remote
-            commit_message_res = run_command(['git', 'log', '-1', '--pretty=%B', 'origin/main'])
-            commit_date_res = run_command(['git', 'log', '-1', '--pretty=%ci', 'origin/main'])
-
-            if commit_message_res.returncode == 0 and commit_date_res.returncode == 0:
-                commit_details = {
-                    "message": commit_message_res.stdout.strip(),
-                    "date": commit_date_res.stdout.strip()
-                }
-                return UPDATE_STATUS["AHEAD"], "Có phiên bản mới! Sẵn sàng cập nhật.", commit_details
-            else:
-                return UPDATE_STATUS["AHEAD"], "Có phiên bản mới! (Không lấy được chi tiết).", None
+            details = get_commit_details('origin/main')
+            return UPDATE_STATUS["AHEAD"], "Có phiên bản mới! Sẵn sàng cập nhật.", details
         else:
-             return UPDATE_STATUS["UP_TO_DATE"], "Repo đã bị thay đổi. Vui lòng cập nhật thủ công.", None
+            details = get_commit_details('HEAD')
+            return UPDATE_STATUS["UP_TO_DATE"], "Repo đã bị thay đổi. Vui lòng cập nhật thủ công.", details
 
 
 def perform_update():

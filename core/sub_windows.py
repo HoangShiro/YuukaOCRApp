@@ -514,23 +514,33 @@ class ConfigWindow(PhysicsMovableWidget):
         """Slot xử lý kết quả khi thread check update hoàn thành."""
         self.update_status_label.setText(message)
 
+        # Đặt lại trạng thái ban đầu
+        self.update_button.hide()
+        self.update_details_label.hide()
+        self.update_details_label.setText("")
+
+        # Hiển thị thông tin commit nếu có
+        if details:
+            commit_msg = details.get('message', 'N/A').replace('<', '<').replace('>', '>')
+            commit_date = details.get('date', 'N/A')
+            
+            # Thay đổi tiêu đề tùy theo trạng thái
+            title = "<b>Nội dung cập nhật:</b>"
+            if status == update.UPDATE_STATUS['UP_TO_DATE']:
+                title = "<b>Thông tin phiên bản hiện tại:</b>"
+
+            details_text = f"""
+            <p>{title}<br/>
+            {commit_msg.replace(os.linesep, '<br/>')}</p>
+            <p><b>Thời gian:</b> {commit_date}</p>
+            """
+            self.update_details_label.setText(details_text)
+            self.update_details_label.show()
+
+        # Hiển thị nút update nếu cần
         if status == update.UPDATE_STATUS['AHEAD']:
             self.update_button.show()
             self.update_button.setEnabled(True)
-            if details:
-                commit_msg = details.get('message', 'N/A').replace('<', '<').replace('>', '>')
-                commit_date = details.get('date', 'N/A')
-                details_text = f"""
-                <p><b>Nội dung cập nhật:</b><br/>
-                {commit_msg.replace(os.linesep, '<br/>')}</p>
-                <p><b>Thời gian:</b> {commit_date}</p>
-                """
-                self.update_details_label.setText(details_text)
-                self.update_details_label.show()
-        else:
-            self.update_details_label.hide()
-            self.update_details_label.setText("")
-            self.update_button.hide()
 
     def _on_update_button_clicked(self):
         """Slot xử lý khi người dùng nhấn nút update."""
