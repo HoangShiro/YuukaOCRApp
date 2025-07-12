@@ -1,26 +1,26 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: --- Auto-update via Git (Logic giu nguyen, rat tot) ---
+:: --- Step 0: Auto-update via Git ---
 echo Yuuka: Checking for updates...
 git --version >nul 2>nul
-if %errorlevel% neq 0 (
-    echo   [INFO] Git not found. Skipping auto-update.
-) else (
+if %errorlevel% equ 0 (
     if exist ".git" (
         git fetch origin >nul 2>nul
         if !errorlevel! equ 0 (
-            git rev-parse HEAD > "%TEMP%\local_hash.tmp"
-            git rev-parse origin/main > "%TEMP%\remote_hash.tmp"
-            fc "%TEMP%\local_hash.tmp" "%TEMP%\remote_hash.tmp" >nul 2>nul
-            if !errorlevel! neq 0 (
+            set "LOCAL_HASH="
+            set "REMOTE_HASH="
+            for /f "delims=" %%i in ('git rev-parse HEAD') do set "LOCAL_HASH=%%i"
+            for /f "delims=" %%i in ('git rev-parse origin/main') do set "REMOTE_HASH=%%i"
+
+            if "!LOCAL_HASH!" neq "!REMOTE_HASH!" (
                 echo   New version available! Forcing update...
-                echo   WARNING: Any local code changes will be overwritten.
+                echo   (User files in 'user' folder will be preserved.)
                 git reset --hard origin/main
-                if !errorlevel! neq 0 (
-                    echo   [ERROR] Update failed. The application will run with the current version.
+                if !errorlevel! equ 0 (
+                    echo   Update successful! If the app fails to start, please run INSTALL.bat again.
                 ) else (
-                    echo   Update successful! You may need to run INSTALL.bat again if there are new dependencies.
+                    echo   [ERROR] Update failed. Running with the current version.
                 )
             ) else (
                 echo   Application is up to date.
@@ -30,11 +30,11 @@ if %errorlevel% neq 0 (
 )
 echo.
 
-:: --- Launch the application from virtual environment ---
+:: --- Step 1: Check for Virtual Environment and Launch ---
 set "VENV_PYTHONW=yuuka_venv\Scripts\pythonw.exe"
 if not exist "!VENV_PYTHONW!" (
-    echo [ERROR] Virtual environment not found.
-    echo Please run INSTALL.bat first to set up the application.
+    echo [ERROR] Application is not installed correctly.
+    echo Please run INSTALL.bat first to set up all necessary components.
     pause
     exit /b
 )
