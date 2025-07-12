@@ -4,19 +4,21 @@ import sys
 import os
 
 UPDATE_STATUS = {
+    "CHECKING": -1,
     "UP_TO_DATE": 0,
-    "UPDATED": 1,
+    "AHEAD": 1,         # Có bản cập nhật
     "GIT_NOT_FOUND": 2,
     "NOT_A_GIT_REPO": 3,
     "FETCH_FAILED": 4,
-    "UPDATE_FAILED": 5,
+    "ERROR": 5,         # Lỗi chung
+    "UPDATED": 6,       # Đã cập nhật thành công
+    "UPDATE_FAILED": 7, # Cập nhật thất bại
 }
 
 def run_command(command):
     """Chạy một command và trả về output, ẩn cửa sổ console."""
     startupinfo = subprocess.STARTUPINFO()
     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    # YUUKA: Chạy command trong thư mục gốc của project
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     return subprocess.run(
@@ -25,60 +27,55 @@ def run_command(command):
         text=True,
         encoding='utf-8',
         startupinfo=startupinfo,
-        cwd=project_root # Đảm bảo lệnh git chạy đúng chỗ
+        cwd=project_root
     )
 
 def check_for_updates():
     """
-    Kiểm tra và cập nhật repo Git.
+    Chỉ kiểm tra xem có bản cập nhật hay không.
     Trả về một status code từ UPDATE_STATUS và một thông báo.
     """
-    print("Yuuka: Checking for updates...")
-
-    # Kiểm tra xem có phải là repo Git không
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if not os.path.isdir(os.path.join(project_root, '.git')):
-        print("  [INFO] Not a Git repository. Skipping auto-update.")
-        return UPDATE_STATUS["NOT_A_GIT_REPO"], "Not a Git repository. Skipping auto-update."
+        return UPDATE_STATUS["NOT_A_GIT_REPO"], "Đây không phải là một repo Git."
 
-    # Kiểm tra Git có được cài đặt không
-    result = run_command(['git', '--version'])
-    if result.returncode != 0:
-        print("  [INFO] Git not found. Skipping auto-update.")
-        return UPDATE_STATUS["GIT_NOT_FOUND"], "Git not found. Skipping auto-update."
+    if run_command(['git', '--version']).returncode != 0:
+        return UPDATE_STATUS["GIT_NOT_FOUND"], "Không tìm thấy Git trên hệ thống."
     
-    # 1. Fetch updates
-    print("  Fetching updates from server...")
-    result = run_command(['git', 'fetch', 'origin'])
-    if result.returncode != 0:
-        print(f"  [ERROR] Failed to fetch from origin: {result.stderr.strip()}")
-        return UPDATE_STATUS["FETCH_FAILED"], f"Fetch failed: {result.stderr.strip()}"
+    fetch_result = run_command(['git', 'fetch', 'origin'])
+    if fetch_result.returncode != 0:
+        return UPDATE_STATUS["FETCH_FAILED"], f"Lỗi khi fetch: {fetch_result.stderr.strip()}"
 
-    # 2. Lấy local và remote hash
-    local_hash_res = run_command(['git', 'rev-parse', 'HEAD'])
-    remote_hash_res = run_command(['git', 'rev-parse', 'origin/main']) # Giả sử nhánh chính là 'main'
+    local_hash = run_command(['git', 'rev-parse', 'HEAD']).stdout.strip()
+    remote_hash = run_command(['git', 'rev-parse', 'origin/main']).stdout.strip()
+    
+    if not local_hash or not remote_hash:
+        return UPDATE_STATUS["ERROR"], "Không thể lấy thông tin commit."
 
-    if local_hash_res.returncode != 0 or remote_hash_res.returncode != 0:
-        error_msg = local_hash_res.stderr.strip() or remote_hash_res.stderr.strip()
-        print(f"  [ERROR] Could not get commit hashes. {error_msg}")
-        return UPDATE_STATUS["FETCH_FAILED"], f"Could not get commit hashes: {error_msg}"
-
-    local_hash = local_hash_res.stdout.strip()
-    remote_hash = remote_hash_res.stdout.strip()
-
-    # 3. So sánh và cập nhật
     if local_hash == remote_hash:
-        print("  Application is up to date.")
-        return UPDATE_STATUS["UP_TO_DATE"], "Application is up to date."
+        return UPDATE_STATUS["UP_TO_DATE"], "Bạn đang ở phiên bản mới nhất."
     else:
-        print("  New version available! Forcing update...")
-        reset_result = run_command(['git', 'reset', '--hard', 'origin/main'])
-        
-        if reset_result.returncode == 0:
-            msg = "Update successful! Please run INSTALL.bat again to update dependencies before relaunching."
-            print(f"  {msg}")
-            return UPDATE_STATUS["UPDATED"], msg
+        # Kiểm tra xem remote có phải là cha của local không (để chắc chắn đây là update chứ ko phải diverge)
+        is_ancestor = run_command(['git', 'merge-base', '--is-ancestor', 'HEAD', 'origin/main'])
+        if is_ancestor.returncode == 0:
+             return UPDATE_STATUS["AHEAD"], "Có phiên bản mới! Sẵn sàng cập nhật."
         else:
-            msg = f"Update failed: {reset_result.stderr.strip()}"
-            print(f"  [ERROR] {msg}")
-            return UPDATE_STATUS["UPDATE_FAILED"], msg
+             return UPDATE_STATUS["UP_TO_DATE"], "Repo đã bị thay đổi. Vui lòng cập nhật thủ công."
+
+
+def perform_update():
+    """
+    Thực hiện việc cập nhật bằng git reset.
+    Trả về một status code và một thông báo.
+    """
+    print("Yuuka: Performing hard reset to origin/main...")
+    reset_result = run_command(['git', 'reset', '--hard', 'origin/main'])
+    
+    if reset_result.returncode == 0:
+        msg = "Cập nhật thành công!"
+        print(f"  {msg}")
+        return UPDATE_STATUS["UPDATED"], msg
+    else:
+        msg = f"Cập nhật thất bại: {reset_result.stderr.strip()}"
+        print(f"  [ERROR] {msg}")
+        return UPDATE_STATUS["UPDATE_FAILED"], msg

@@ -1,19 +1,16 @@
 # core/sub_windows.py
 import os
+import threading
 from PySide6.QtWidgets import (QTextEdit, QVBoxLayout, QWidget, QApplication, QCheckBox,
                                QLabel, QFrame, QLineEdit, QPushButton, QHBoxLayout, QColorDialog,
                                QFontComboBox, QSpinBox, QSlider, QGridLayout, QButtonGroup,
                                QSizePolicy, QFileDialog, QAbstractItemView, QStackedWidget,
-                               QComboBox)
-from PySide6.QtGui import QPainter, QColor, QPen, QFont, QDragEnterEvent, QMouseEvent, QKeyEvent, QPixmap
+                               QComboBox, QGroupBox)
+from PySide6.QtGui import QPainter, QColor, QPen, QFont, QDragEnterEvent, QMouseEvent, QKeyEvent, QPixmap, QKeySequence
 from PySide6.QtCore import Qt, Signal, QRect, QPoint, QUrl, QEvent, QTimer
 
 from core.physics import PhysicsMovableWidget
-
-# YUUKA: Custom button để ghi lại phím tắt
-from PySide6.QtCore import Qt, Signal, QEvent
-from PySide6.QtGui import QKeyEvent, QKeySequence
-from PySide6.QtWidgets import QApplication, QPushButton
+from core import update
 
 class HotkeyCaptureButton(QPushButton):
     hotkey_captured = Signal(str)
@@ -190,6 +187,8 @@ class ConfigWindow(PhysicsMovableWidget):
     config_changed = Signal(dict)
     apiKeySubmitted = Signal(str)
     uiImageChanged = Signal(str)
+    requestRestart = Signal()
+    updateCheckCompleted = Signal(int, str)
 
     def __init__(self, parent=None, physics_config=None):
         super().__init__(parent, physics_config)
@@ -238,7 +237,6 @@ class ConfigWindow(PhysicsMovableWidget):
     def _create_nav_bar(self):
         nav_widget = QWidget(); nav_widget.setObjectName("navBar")
         nav_layout = QVBoxLayout(nav_widget)
-        # YUUKA FIX: Tăng lề trái/phải để chữ không bị cắt
         nav_layout.setContentsMargins(15, 10, 15, 10); nav_layout.setSpacing(5)
         
         self.nav_button_group = QButtonGroup(self)
@@ -266,11 +264,36 @@ class ConfigWindow(PhysicsMovableWidget):
         return tab_widget
 
     def _create_system_tab(self):
-        left = QVBoxLayout(); left.addWidget(QLabel("<b>Cài đặt chung</b>"))
+        # --- Cột trái ---
+        left = QVBoxLayout()
+        
+        # Group Cài đặt chung
+        general_group = QGroupBox("Cài đặt chung")
+        general_layout = QVBoxLayout()
+        self.auto_update_cb = QCheckBox("Tự động update khi khởi động")
         self.text_clipboard_cb = QCheckBox("Bật đọc text clipboard")
         self.file_clipboard_cb = QCheckBox("Xử lý file từ clipboard (Ctrl+C)")
-        left.addWidget(self.text_clipboard_cb); left.addWidget(self.file_clipboard_cb); left.addStretch()
+        general_layout.addWidget(self.auto_update_cb)
+        general_layout.addWidget(self.text_clipboard_cb)
+        general_layout.addWidget(self.file_clipboard_cb)
+        general_group.setLayout(general_layout)
+        left.addWidget(general_group)
 
+        # Group Kiểm tra Update
+        update_group = QGroupBox("Kiểm tra Update")
+        update_layout = QVBoxLayout()
+        self.update_status_label = QLabel("Đang kiểm tra...")
+        self.update_status_label.setWordWrap(True)
+        self.update_button = QPushButton("Cập nhật & Khởi động lại")
+        self.update_button.hide() # Ẩn ban đầu
+        update_layout.addWidget(self.update_status_label)
+        update_layout.addWidget(self.update_button)
+        update_group.setLayout(update_layout)
+        left.addWidget(update_group)
+        
+        left.addStretch()
+
+        # --- Cột phải (không đổi) ---
         right = QVBoxLayout(); right.addWidget(QLabel("<b>Cài đặt Prompt & API</b>"))
         self.prompt_enabled_cb = QCheckBox("Bật prompt tùy chỉnh")
         self.custom_prompt_edit = QTextEdit(); self.custom_prompt_edit.setPlaceholderText("Nhập prompt của bạn..."); self.custom_prompt_edit.setFixedHeight(100)
@@ -278,10 +301,8 @@ class ConfigWindow(PhysicsMovableWidget):
         self.api_key_edit = QLineEdit(); self.api_key_edit.setPlaceholderText("Dán key (AIza...) vào đây"); self.api_key_edit.setEchoMode(QLineEdit.Password)
         self.api_key_status_label = QLabel(""); self.api_key_save_button = QPushButton("Xác thực"); self.api_key_status_label.setObjectName("api_key_status_label")
         api_hbox = QHBoxLayout(); api_hbox.addWidget(self.api_key_edit); api_hbox.addWidget(self.api_key_save_button)
-        
         self.gemini_model_label = QLabel("Model Gemini (mặc định: gemini-2.0-flash):")
         self.gemini_model_combo = QComboBox()
-
         right.addWidget(self.prompt_enabled_cb); right.addWidget(self.custom_prompt_edit); right.addWidget(self._create_line()); right.addWidget(self.api_key_label); right.addLayout(api_hbox); right.addWidget(self.api_key_status_label)
         right.addWidget(self.gemini_model_label); right.addWidget(self.gemini_model_combo); right.addStretch()
         
@@ -376,6 +397,9 @@ class ConfigWindow(PhysicsMovableWidget):
         return self._create_tab_content_widget(left, right)
     
     def _connect_signals(self):
+        self.auto_update_cb.stateChanged.connect(self._emit_changes)
+        self.update_button.clicked.connect(self._on_update_button_clicked)
+        self.updateCheckCompleted.connect(self._on_update_check_completed)
         self.text_clipboard_cb.stateChanged.connect(self._emit_changes)
         self.file_clipboard_cb.stateChanged.connect(self._emit_changes)
         self.prompt_enabled_cb.stateChanged.connect(self._emit_changes)
@@ -424,13 +448,15 @@ class ConfigWindow(PhysicsMovableWidget):
             #dropZone {{ border: 2px dashed {accent_color}88; border-radius: 5px; padding: 10px; color: {text_color}aa; }}
             #uiPreview {{ border: none; padding: 5px; margin-top: 5px; color: {text_color}aa; }}
             
-            QLabel, QCheckBox {{ color: {text_color}; font-family: "{font_family}"; font-size: {font_size}pt; }}
+            QGroupBox {{ border: 1px solid {accent_color}66; border-radius: 5px; margin-top: 1ex; color: {accent_color}; font-weight: bold; padding: 5px; }}
+            QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top center; padding: 0 3px; background-color: {bg_color_str}; }}
+            
+            QLabel, QCheckBox {{ color: {text_color}; font-family: "{font_family}"; font-size: {font_size}pt; font-weight: normal; }}
             QLabel b {{ font-weight: bold; color: {accent_color}; }}
             QCheckBox::indicator {{ border: 1px solid {accent_color}; border-radius: 3px; }}
             QCheckBox::indicator:checked {{ background-color: {accent_color}; }}
             
             QTextEdit, QLineEdit, QFontComboBox, QSpinBox, QComboBox {{ background-color: rgba(0,0,0,0.2); border: 1px solid {accent_color}88; border-radius: 5px; color: {text_color}; padding: 5px; font-family: "{font_family}"; font-size: {font_size}pt; }}
-            /* YUUKA FIX: Bỏ các rule ẩn mũi tên dropdown */
             
             QTextEdit:focus, QLineEdit:focus, QFontComboBox:focus, QSpinBox:focus, QComboBox:focus {{ border-color: {accent_color}; }}
             
@@ -460,6 +486,33 @@ class ConfigWindow(PhysicsMovableWidget):
         self.theme_close_button_preview.setStyleSheet(f"background-color: {close_btn_hex}; border: 1px solid {text_color}44;"); self.theme_close_button_preview.setText(close_btn_hex)
         self.adjustSize()
 
+    def _run_update_check_in_thread(self):
+        """Chạy check_for_updates trong thread riêng để không block UI."""
+        status, message = update.check_for_updates()
+        self.updateCheckCompleted.emit(status, message)
+        
+    def _on_update_check_completed(self, status, message):
+        """Slot xử lý kết quả khi thread check update hoàn thành."""
+        self.update_status_label.setText(message)
+        if status == update.UPDATE_STATUS['AHEAD']:
+            self.update_button.show()
+            self.update_button.setEnabled(True)
+        else:
+            self.update_button.hide()
+
+    def _on_update_button_clicked(self):
+        """Slot xử lý khi người dùng nhấn nút update."""
+        self.update_status_label.setText("Đang cập nhật... Vui lòng không tắt Yuuka nhé!")
+        self.update_button.setEnabled(False)
+        QApplication.processEvents() # Cập nhật UI ngay lập tức
+
+        # Chạy update và restart trong thread riêng
+        def update_and_restart_thread():
+            update.perform_update()
+            self.requestRestart.emit()
+
+        threading.Thread(target=update_and_restart_thread, daemon=True).start()
+
     def _emit_changes(self, _=None):
         theme_data = {'accent_color': self.theme_accent_preview.text(), 'sub_win_bg': self.theme_bg_preview.text(), 'sub_win_text': self.theme_text_preview.text(), 'sub_win_font_family': self.font_family_combo.currentFont().family(), 'sub_win_font_size': self.font_size_spinbox.value()}
         
@@ -468,6 +521,7 @@ class ConfigWindow(PhysicsMovableWidget):
              hotkey_text = self.ocr_hotkey_button._original_text
 
         config_data = {
+            'auto_update_enabled': self.auto_update_cb.isChecked(),
             'process_text_clipboard': self.text_clipboard_cb.isChecked(), 'process_file_clipboard': self.file_clipboard_cb.isChecked(),
             'prompt_enabled': self.prompt_enabled_cb.isChecked(), 'custom_prompt': self.custom_prompt_edit.toPlainText().strip(), 
             'theme': theme_data, 
@@ -520,6 +574,7 @@ class ConfigWindow(PhysicsMovableWidget):
 
     def load_config(self, config_data, app_configs, api_key_info, base_pixmap):
         for widget in self.findChildren(QWidget): widget.blockSignals(True)
+        self.auto_update_cb.setChecked(config_data.get('auto_update_enabled', True))
         self.text_clipboard_cb.setChecked(config_data.get('process_text_clipboard', False)); self.file_clipboard_cb.setChecked(config_data.get('process_file_clipboard', True))
         self.prompt_enabled_cb.setChecked(config_data.get('prompt_enabled', False)); self.custom_prompt_edit.setText(config_data.get('custom_prompt', ''))
         theme_config = config_data.get('theme', {}); self.theme_accent_preview.setText(theme_config.get('accent_color', '#E98973')); self.theme_bg_preview.setText(theme_config.get('sub_win_bg', 'rgba(30,30,30,245)')); self.theme_text_preview.setText(theme_config.get('sub_win_text', '#FFFFFF'))
@@ -543,6 +598,10 @@ class ConfigWindow(PhysicsMovableWidget):
         self.update_ui_preview(base_pixmap)
         for widget in self.findChildren(QWidget): widget.blockSignals(False)
         self.adjustSize()
+        
+        self.update_status_label.setText("Đang kiểm tra update...")
+        self.update_button.hide()
+        threading.Thread(target=self._run_update_check_in_thread, daemon=True).start()
 
     def update_ui_preview(self, pixmap: QPixmap):
         if not pixmap or pixmap.isNull(): self.ui_preview_label.setText("Không có giao diện"); return

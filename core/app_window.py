@@ -269,6 +269,7 @@ class MainWindow(PhysicsMovableWidget):
             'positions': {}, 'custom_prompt': "LUÔN LUÔN dịch text sang tiếng việt với tone phù hợp với ngữ cảnh/giọng điệu/ngôn ngữ trẻ trung/anime. Chỉ trả về duy nhất text được dịch.",
             'prompt_enabled': False, 'process_text_clipboard': False, 
             'process_file_clipboard': True, 
+            'auto_update_enabled': True,
             'ui_scale': 100, 'close_button_color': self.app_configs.get("CLOSE_BUTTON_COLOR_RGB"), 
             'sub_window_position': 'auto', 'sub_window_spacing': 5,
             'theme': { 'accent_color': '#E98973', 'sub_win_bg': '#eb74515f', 'sub_win_text': '#FFFFFF', 'sub_win_font_family': 'Segoe UI', 'sub_win_font_size': 10 },
