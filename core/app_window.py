@@ -267,7 +267,7 @@ class MainWindow(PhysicsMovableWidget):
             'positions': {}, 'custom_prompt': "LUÔN LUÔN dịch text sang tiếng việt với tone phù hợp với ngữ cảnh/giọng điệu/ngôn ngữ trẻ trung/anime. Chỉ trả về duy nhất text được dịch.",
             'prompt_enabled': False, 'process_text_clipboard': False, 
             'process_file_clipboard': True, 
-            'ui_scale': 50, 'close_button_color': self.app_configs.get("CLOSE_BUTTON_COLOR_RGB"), 
+            'ui_scale': 100, 'close_button_color': self.app_configs.get("CLOSE_BUTTON_COLOR_RGB"), 
             'sub_window_position': 'auto', 'sub_window_spacing': 5,
             'theme': { 'accent_color': '#E98973', 'sub_win_bg': 'rgba(30, 30, 30, 245)', 'sub_win_text': '#FFFFFF', 'sub_win_font_family': 'Segoe UI', 'sub_win_font_size': 10 },
             'PHYSICS_SPRING_CONSTANT': self.app_configs.get('PHYSICS_SPRING_CONSTANT'),
@@ -493,7 +493,9 @@ class MainWindow(PhysicsMovableWidget):
     def _perform_reset_status(self):
         if self.is_processing_request or self.notification_window.isVisible(): return
         hotkey = self.user_config.get('hook_ocr_hotkey', 'phím tắt').upper()
-        if self.is_api_key_needed: self.update_status("Vào config nhập API đi~")
+        if self.is_api_key_needed:
+            self.update_status("Wake up~")
+            self.update_status("Copy Gemini API key đi~")
         elif self.is_hooked: self.update_status(f"Nhấn '{hotkey}' để OCR.")
         elif self.user_config.get('process_text_clipboard', False): self.update_status("Yuuka: Copy text đi~")
         elif self.user_config.get('prompt_enabled', False): self.update_status("Yuuka: Prompt mode on!")
