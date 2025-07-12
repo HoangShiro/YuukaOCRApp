@@ -7,6 +7,7 @@ import psutil
 from PySide6.QtCore import QRect, QPoint
 from PySide6.QtWidgets import QApplication
 import hashlib # YUUKA: Thêm thư viện hash ổn định
+import winreg # YUUKA: Thêm thư viện để chỉnh sửa registry
 
 def get_true_window_rect(hwnd):
     """
@@ -57,3 +58,37 @@ def get_display_config_hash():
     # YUUKA FIX: Sử dụng hashlib.sha256 thay vì hash() để đảm bảo hash là nhất quán
     # giữa các lần chạy chương trình.
     return hashlib.sha256(config_str.encode('utf-8')).hexdigest()
+
+def set_startup_status(enabled: bool):
+    """
+    Thêm hoặc gỡ ứng dụng khỏi danh sách khởi động cùng Windows.
+    Sử dụng RUN.bat để đảm bảo môi trường được thiết lập đúng.
+    """
+    APP_NAME = "YuukaOCR"
+    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    
+    try:
+        # Lấy đường dẫn tuyệt đối tới file RUN.bat trong thư mục gốc của project
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        run_bat_path = os.path.join(project_root, "RUN.bat")
+
+        if not os.path.exists(run_bat_path):
+            print(f"Yuuka Startup: Lỗi - Không tìm thấy file '{run_bat_path}' để cấu hình startup.")
+            return
+
+        # Mở key trong registry của user hiện tại, không cần quyền admin
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS) as key:
+            if enabled:
+                # Thêm hoặc cập nhật entry, đặt đường dẫn trong dấu ngoặc kép để xử lý space
+                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, f'"{run_bat_path}"')
+                print("Yuuka Startup: Đã đăng ký khởi động cùng hệ thống.")
+            else:
+                # Gỡ entry khỏi startup
+                try:
+                    winreg.DeleteValue(key, APP_NAME)
+                    print("Yuuka Startup: Đã gỡ khỏi danh sách khởi động cùng hệ thống.")
+                except FileNotFoundError:
+                    # Không sao nếu không tìm thấy, có nghĩa là đã được gỡ từ trước
+                    pass
+    except Exception as e:
+        print(f"Yuuka Startup: Lỗi khi thay đổi cài đặt startup: {e}")

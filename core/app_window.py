@@ -21,7 +21,7 @@ from PySide6.QtCore import Qt, QTimer, QPoint, QPointF, Signal, QRect
 
 from core.physics import PhysicsMovableWidget
 from core.sub_windows import ConfigWindow, NotificationWindow, ResultDisplayWindow, SnippingWidget, SelectionOverlayWidget
-from core.utils import get_true_window_rect, get_process_name_from_hwnd, get_screen_dpi_ratio, get_display_config_hash
+from core.utils import get_true_window_rect, get_process_name_from_hwnd, get_screen_dpi_ratio, get_display_config_hash, set_startup_status
 
 # YUUKA: HotkeyListener được cải tiến để xử lý tất cả các tổ hợp phím một cách đáng tin cậy.
 class HotkeyListener(threading.Thread):
@@ -270,6 +270,7 @@ class MainWindow(PhysicsMovableWidget):
             'prompt_enabled': False, 'process_text_clipboard': False, 
             'process_file_clipboard': True, 
             'auto_update_enabled': True,
+            'start_with_system': False,
             'ui_scale': 100, 'close_button_color': self.app_configs.get("CLOSE_BUTTON_COLOR_RGB"), 
             'sub_window_position': 'auto', 'sub_window_spacing': 5,
             'theme': { 'accent_color': '#E98973', 'sub_win_bg': '#eb74515f', 'sub_win_text': '#FFFFFF', 'sub_win_font_family': 'Segoe UI', 'sub_win_font_size': 10 },
@@ -321,6 +322,10 @@ class MainWindow(PhysicsMovableWidget):
             if is_different:
                 self.user_config[key] = value
                 changed = True
+
+                if key == 'start_with_system':
+                    set_startup_status(value)
+
                 # YUUKA FIX: Bỏ thông báo prompt mode
                 if key in ['sub_window_position', 'sub_window_spacing']: layout_changed = True
                 if key in ['theme', 'ui_scale', 'close_button_color']: theme_related_changed = True

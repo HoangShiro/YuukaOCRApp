@@ -271,9 +271,11 @@ class ConfigWindow(PhysicsMovableWidget):
         general_group = QGroupBox("Cài đặt chung")
         general_layout = QVBoxLayout()
         self.auto_update_cb = QCheckBox("Tự động update khi khởi động")
+        self.start_with_system_cb = QCheckBox("Khởi động cùng System")
         self.text_clipboard_cb = QCheckBox("Bật đọc text clipboard")
         self.file_clipboard_cb = QCheckBox("Xử lý file từ clipboard (Ctrl+C)")
         general_layout.addWidget(self.auto_update_cb)
+        general_layout.addWidget(self.start_with_system_cb)
         general_layout.addWidget(self.text_clipboard_cb)
         general_layout.addWidget(self.file_clipboard_cb)
         general_group.setLayout(general_layout)
@@ -398,6 +400,7 @@ class ConfigWindow(PhysicsMovableWidget):
     
     def _connect_signals(self):
         self.auto_update_cb.stateChanged.connect(self._emit_changes)
+        self.start_with_system_cb.stateChanged.connect(self._emit_changes)
         self.update_button.clicked.connect(self._on_update_button_clicked)
         self.updateCheckCompleted.connect(self._on_update_check_completed)
         self.text_clipboard_cb.stateChanged.connect(self._emit_changes)
@@ -522,6 +525,7 @@ class ConfigWindow(PhysicsMovableWidget):
 
         config_data = {
             'auto_update_enabled': self.auto_update_cb.isChecked(),
+            'start_with_system': self.start_with_system_cb.isChecked(),
             'process_text_clipboard': self.text_clipboard_cb.isChecked(), 'process_file_clipboard': self.file_clipboard_cb.isChecked(),
             'prompt_enabled': self.prompt_enabled_cb.isChecked(), 'custom_prompt': self.custom_prompt_edit.toPlainText().strip(), 
             'theme': theme_data, 
@@ -575,6 +579,7 @@ class ConfigWindow(PhysicsMovableWidget):
     def load_config(self, config_data, app_configs, api_key_info, base_pixmap):
         for widget in self.findChildren(QWidget): widget.blockSignals(True)
         self.auto_update_cb.setChecked(config_data.get('auto_update_enabled', True))
+        self.start_with_system_cb.setChecked(config_data.get('start_with_system', False))
         self.text_clipboard_cb.setChecked(config_data.get('process_text_clipboard', False)); self.file_clipboard_cb.setChecked(config_data.get('process_file_clipboard', True))
         self.prompt_enabled_cb.setChecked(config_data.get('prompt_enabled', False)); self.custom_prompt_edit.setText(config_data.get('custom_prompt', ''))
         theme_config = config_data.get('theme', {}); self.theme_accent_preview.setText(theme_config.get('accent_color', '#E98973')); self.theme_bg_preview.setText(theme_config.get('sub_win_bg', 'rgba(30,30,30,245)')); self.theme_text_preview.setText(theme_config.get('sub_win_text', '#FFFFFF'))
