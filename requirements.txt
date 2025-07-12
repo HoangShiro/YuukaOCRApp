@@ -1,0 +1,10 @@
+PySide6
+numpy
+python-dotenv
+pyperclip
+Pillow
+google-generativeai
+pywin32
+psutil
+opencv-python
+pynput
