@@ -481,7 +481,9 @@ class MainWindow(PhysicsMovableWidget):
 
     def update_status(self, text, duration=0):
         if self.config_window.isVisible(): self.config_window.hide()
-        if text.endswith("...") and not self.is_processing_request: self.is_processing_request = True
+        
+        # YUUKA FIX: Xóa bỏ logic tự động đặt is_processing_request.
+        # Trạng thái này giờ sẽ được quản lý một cách tường minh.
         
         self.notification_window.setText(text)
         self._position_sub_window(self.notification_window, self.pos())
@@ -493,7 +495,7 @@ class MainWindow(PhysicsMovableWidget):
         if self.is_processing_request or self.notification_window.isVisible(): return
         hotkey = self.user_config.get('hook_ocr_hotkey', 'phím tắt').upper()
         if self.is_api_key_needed:
-            self.update_status("Waking up...") # Dòng này giúp fix lỗi thông báo cần API key không hiển thị.
+            self.update_status("Waking up...") 
             self.update_status("Copy Gemini API key đi~")
         elif self.is_hooked: self.update_status(f"Nhấn '{hotkey}' để OCR.")
         elif self.user_config.get('process_text_clipboard', False): self.update_status("Yuuka: Copy text đi~")
@@ -544,7 +546,6 @@ class MainWindow(PhysicsMovableWidget):
         self.hooked_win_rect_physical = rect_physical; self._reset_roi_state()
         if self.config_window.isVisible(): self.config_window.hide()
         
-        # YUUKA FIX: Ẩn thông báo hiện tại để đảm bảo reset_status() có thể đặt thông báo mới
         if self.notification_window.isVisible():
             self.notification_window.hide()
 
@@ -702,7 +703,13 @@ class MainWindow(PhysicsMovableWidget):
         if not self.config_window.isVisible():
             self.update_status("Yuuka: Key OK!", 3000)
 
-    def handle_processing_complete(self): self.is_processing_request = False; self.reset_status()
+    # YUUKA FIX: Thêm slot để xử lý khi một quá trình xử lý thực sự bắt đầu.
+    def handle_processing_started(self):
+        self.is_processing_request = True
+
+    def handle_processing_complete(self): 
+        self.is_processing_request = False
+        self.reset_status()
     
     def handle_show_result(self, result_text):
         if self.config_window.isVisible(): self.config_window.hide()

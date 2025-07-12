@@ -25,6 +25,9 @@ class GeminiOCRPlugin(QObject):
     apiKeyVerified = Signal(str, list)
     apiKeyNeeded = Signal()
     apiKeyFailed = Signal(str) 
+    
+    # YUUKA FIX: Thêm tín hiệu mới để báo hiệu quá trình bắt đầu.
+    processingStarted = Signal()
     processingComplete = Signal()
 
     def __init__(self, user_config_path, app_configs):
@@ -203,6 +206,8 @@ class GeminiOCRPlugin(QObject):
         finally: self.processingComplete.emit()
 
     def _process_with_error_handling(self, target_func, *args):
+        # YUUKA FIX: Phát tín hiệu quá trình bắt đầu một cách tường minh.
+        self.processingStarted.emit()
         self.updateStatus.emit("Yuuka: Đợi chút nha...", 0)
         try:
             if not self.model: self.apiKeyNeeded.emit(); self.updateStatus.emit("Yuuka: Cần API key!", 3000); self.processingComplete.emit(); return
@@ -236,11 +241,13 @@ class GeminiOCRPlugin(QObject):
         response = self.model.generate_content([prompt, img]); self.process_and_copy_result(response)
 
     def handle_hooked_ocr_request(self, physical_roi_rect):
-        threading.Thread(target=self._process_with_error_handling, args=(self.process_hooked_region_in_thread, physical_roi_rect), daemon=True).start()
+        # YUUKA FIX: Không cần bắt đầu thread ở đây, vì logic đã được chuyển vào _process_with_error_handling
+        self._process_with_error_handling(self.process_hooked_region_in_thread, physical_roi_rect)
 
     def handle_file_drop_request(self, filepath):
         if self._is_valid_file(filepath):
-            threading.Thread(target=self._process_with_error_handling, args=(self.process_file_in_thread, filepath), daemon=True).start()
+            # YUUKA FIX: Dùng lại hàm wrapper để đảm bảo tín hiệu được phát đi đúng cách
+            self._process_with_error_handling(self.process_file_in_thread, filepath)
         else:
             self.processingComplete.emit()
 

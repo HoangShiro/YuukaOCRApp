@@ -97,6 +97,9 @@ def main():
     gemini_plugin.apiKeyVerified.connect(main_window.handle_api_key_verified)
     gemini_plugin.apiKeyNeeded.connect(main_window.handle_api_key_needed)
     gemini_plugin.apiKeyFailed.connect(main_window.handle_api_key_failed)
+    
+    # YUUKA FIX: Kết nối các tín hiệu quản lý trạng thái mới.
+    gemini_plugin.processingStarted.connect(main_window.handle_processing_started)
     gemini_plugin.processingComplete.connect(main_window.handle_processing_complete)
 
     main_window.requestHookedOCR.connect(gemini_plugin.handle_hooked_ocr_request)
