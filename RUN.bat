@@ -30,17 +30,17 @@ if %errorlevel% equ 0 (
 )
 echo.
 
-:: --- Step 1: Check for Virtual Environment and Launch ---
-set "VENV_PYTHONW=yuuka_venv\Scripts\pythonw.exe"
-if not exist "!VENV_PYTHONW!" (
-    echo [ERROR] Application is not installed correctly.
+:: --- Step 1: Check for Python and Launch ---
+python --version >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [ERROR] Python not found.
     echo Please run INSTALL.bat first to set up all necessary components.
     pause
     exit /b
 )
 
 echo Launching Yuuka OCR...
-start "Yuuka OCR" /B "!VENV_PYTHONW!" main.py
+start "Yuuka OCR" /B pythonw.exe main.py
 
 endlocal
 exit /b
