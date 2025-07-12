@@ -189,6 +189,7 @@ class MainWindow(PhysicsMovableWidget):
         self.drag_position = None
         self.is_api_key_needed = True
         self.last_known_api_key = ""
+        self.available_models = []
         self.is_hooked = False
         self.hook_edge = None
         self.hooked_hwnd = None
@@ -198,7 +199,7 @@ class MainWindow(PhysicsMovableWidget):
         self.hooked_roi_physical = None
         self.overlay_relative_offset_logical = QPoint()
         self.is_processing_request = False
-        self.SCALE_LEVELS = [i for i in range(10, 101, 10)]
+        self.SCALE_LEVELS = [i for i in range(10, 101, 10)] 
 
         self.hotkey_listener = None
 
@@ -207,6 +208,7 @@ class MainWindow(PhysicsMovableWidget):
         self.start_timers()
         self._apply_scale()
         self._apply_global_theme()
+        self._apply_sub_window_min_width()
         self.start_hotkey_listener()
 
     def _get_current_physics_config(self):
@@ -269,11 +271,13 @@ class MainWindow(PhysicsMovableWidget):
             'process_file_clipboard': True, 
             'ui_scale': 100, 'close_button_color': self.app_configs.get("CLOSE_BUTTON_COLOR_RGB"), 
             'sub_window_position': 'auto', 'sub_window_spacing': 5,
-            'theme': { 'accent_color': '#E98973', 'sub_win_bg': 'rgba(30, 30, 30, 245)', 'sub_win_text': '#FFFFFF', 'sub_win_font_family': 'Segoe UI', 'sub_win_font_size': 10 },
+            'theme': { 'accent_color': '#E98973', 'sub_win_bg': '#eb74515f', 'sub_win_text': '#FFFFFF', 'sub_win_font_family': 'Segoe UI', 'sub_win_font_size': 10 },
             'PHYSICS_SPRING_CONSTANT': self.app_configs.get('PHYSICS_SPRING_CONSTANT'),
             'PHYSICS_DAMPING_FACTOR': self.app_configs.get('PHYSICS_DAMPING_FACTOR'),
             'PHYSICS_BOUNCE_DAMPING_FACTOR': self.app_configs.get('PHYSICS_BOUNCE_DAMPING_FACTOR'),
-            'hook_ocr_hotkey': self.app_configs.get('HOOK_OCR_HOTKEY')
+            'hook_ocr_hotkey': self.app_configs.get('HOOK_OCR_HOTKEY'),
+            'min_sub_win_width': 200,
+            'gemini_model': 'gemini-2.0-flash'
         }
         try:
             if os.path.exists(self.user_config_path):
@@ -304,19 +308,24 @@ class MainWindow(PhysicsMovableWidget):
         theme_related_changed = False
         physics_changed = False 
         hotkey_changed = False
+        sub_width_changed = False
 
         for key, value in new_config_values.items():
             current_value = self.user_config.get(key)
-            is_different = current_value is None or (abs(current_value - value) > 1e-9 if isinstance(current_value, float) and isinstance(value, float) else current_value != value)
+            if isinstance(value, dict):
+                is_different = current_value != value
+            else:
+                is_different = current_value is None or (abs(current_value - value) > 1e-9 if isinstance(current_value, float) and isinstance(value, float) else current_value != value)
 
             if is_different:
                 self.user_config[key] = value
                 changed = True
-                if key == 'prompt_enabled': self.update_status(f"Yuuka: Prompt mode {'on' if value else 'off'}!", 3000)
+                # YUUKA FIX: Bỏ thông báo prompt mode
                 if key in ['sub_window_position', 'sub_window_spacing']: layout_changed = True
                 if key in ['theme', 'ui_scale', 'close_button_color']: theme_related_changed = True
                 if key.startswith('PHYSICS_'): physics_changed = True
                 if key == 'hook_ocr_hotkey': hotkey_changed = True
+                if key == 'min_sub_win_width': sub_width_changed = True
                 
         if changed:
             self._save_user_config()
@@ -330,15 +339,18 @@ class MainWindow(PhysicsMovableWidget):
                 physics_cfg = self._get_current_physics_config()
                 for win in [self, self.config_window, self.result_window, self.notification_window, self.selection_overlay]:
                     if win: win.set_physics_params(physics_cfg)
+            
+            if sub_width_changed:
+                self._apply_sub_window_min_width()
 
             if hotkey_changed:
                 self.start_hotkey_listener()
 
-            if layout_changed:
+            if layout_changed or sub_width_changed:
                 for sub_win in [self.config_window, self.result_window, self.notification_window]:
                     if sub_win.isVisible(): self._position_sub_window(sub_win, self.pos())
             
-            if 'prompt_enabled' not in new_config_values: self.reset_status()
+            self.reset_status()
 
     def _on_api_key_submitted(self, key): self.last_known_api_key = key; self.requestApiKeyVerification.emit(key)
     
@@ -350,16 +362,13 @@ class MainWindow(PhysicsMovableWidget):
             if self.base_ui_pixmap.isNull(): raise ValueError("Failed to load new pixmap")
             self._apply_scale()
             self.update_status("Yuuka: Giao diện đã được cập nhật!", 3000)
-            # YUUKA: Cập nhật preview trong config window nếu nó đang mở
             if self.config_window.isVisible():
                 self.config_window.update_ui_preview(self.base_ui_pixmap)
-
         except Exception as e:
-            print(f"Yuuka: Lỗi khi đổi giao diện: {e}")
-            self.update_status("Yuuka: Lỗi đổi giao diện!", 3000)
+            print(f"Yuuka: Lỗi khi đổi giao diện: {e}"); self.update_status("Yuuka: Lỗi đổi giao diện!", 3000)
 
     def _apply_scale(self):
-        scale_percent = self.user_config.get('ui_scale', 50); scale_factor = scale_percent / 100.0
+        scale_percent = self.user_config.get('ui_scale', 100); scale_factor = scale_percent / 100.0
         new_size = self.base_ui_pixmap.size() * scale_factor
         self.setFixedSize(new_size)
         self.ui_pixmap = self.base_ui_pixmap.scaled(new_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -373,32 +382,34 @@ class MainWindow(PhysicsMovableWidget):
         self.result_window.apply_stylesheet(theme_config); self.notification_window.apply_stylesheet(theme_config)
         self.selection_overlay.set_color(theme_config.get('accent_color', '#E98973'))
 
+    def _apply_sub_window_min_width(self):
+        min_width = self.user_config.get('min_sub_win_width', 200)
+        self.result_window.setMinimumWidth(min_width)
+        self.notification_window.setMinimumWidth(min_width)
+
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.setRenderHint(QPainter.Antialiasing); painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.drawPixmap(self.rect(), self.ui_pixmap)
         
     def wheelEvent(self, event: QWheelEvent):
         if not self.rect().contains(event.position().toPoint()): return
-        current_scale = self.user_config.get('ui_scale', 50)
-        try: current_index = self.SCALE_LEVELS.index(current_scale)
-        except ValueError: current_index = min(range(len(self.SCALE_LEVELS)), key=lambda i: abs(self.SCALE_LEVELS[i] - current_scale))
-        delta = 1 if event.angleDelta().y() > 0 else -1
-        current_index = max(0, min(len(self.SCALE_LEVELS) - 1, current_index + delta))
-        new_scale = self.SCALE_LEVELS[current_index]
-        if new_scale != current_scale: self.user_config['ui_scale'] = new_scale; self._apply_scale(); self._save_user_config()
-        event.accept()
+        current_scale = self.user_config.get('ui_scale', 100)
+        delta = 5 if event.angleDelta().y() > 0 else -5
+        new_scale = max(10, min(100, current_scale + delta))
+        if new_scale != current_scale: 
+            self._on_config_changed({'ui_scale': new_scale})
+            if self.config_window.isVisible():
+                 self.config_window.ui_scale_slider.setValue(new_scale)
 
     def closeEvent(self, event: QCloseEvent):
-        if self.hotkey_listener:
-            self.hotkey_listener.stop()
+        if self.hotkey_listener: self.hotkey_listener.stop()
         for window in [self.config_window, self.result_window, self.notification_window, self.snipping_widget, self.selection_overlay]:
             if window: window.close()
         self._save_user_config(); super().closeEvent(event)
 
     def mousePressEvent(self, event):
-        pos = event.position().toPoint(); scale = self.user_config.get('ui_scale', 50) / 100.0
+        pos = event.position().toPoint(); scale = self.user_config.get('ui_scale', 100) / 100.0
         original_size = self.base_ui_pixmap.size()
         original_pos = QPoint(int(pos.x() / scale), int(pos.y() / scale))
         
@@ -407,7 +418,6 @@ class MainWindow(PhysicsMovableWidget):
             pixel_color = self.base_ui_pixmap.toImage().pixelColor(original_pos)
         
         r, g, b = pixel_color.red(), pixel_color.green(), pixel_color.blue()
-
         close_btn_color = self.user_config.get('close_button_color', self.app_configs["CLOSE_BUTTON_COLOR_RGB"])
 
         self.velocity_f += QPointF(0, -2)
@@ -417,24 +427,15 @@ class MainWindow(PhysicsMovableWidget):
             self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft(); self.velocity_f = QPointF(0, 0); event.accept(); return
         
         if event.button() == Qt.RightButton:
-            if self.result_window.isVisible():
-                self.result_window.hide()
-                event.accept()
-                return
-
-            self.toggle_config_window()
-            event.accept()
-            return
+            if self.result_window.isVisible(): self.result_window.hide(); event.accept(); return
+            self.toggle_config_window(); event.accept(); return
             
     def dragEnterEvent(self, event: QDragEnterEvent):
         if self.is_processing_request: return
         if event.mimeData().hasUrls():
             urls = event.mimeData().urls()
-            if urls:
-                filepath = urls[0].toLocalFile()
-                _, ext = os.path.splitext(filepath)
-                if ext.lower() in self.app_configs.get("ACCEPTED_FILE_EXTENSIONS", []):
-                    event.acceptProposedAction()
+            if urls and os.path.splitext(urls[0].toLocalFile())[1].lower() in self.app_configs.get("ACCEPTED_FILE_EXTENSIONS", []):
+                event.acceptProposedAction()
 
     def dropEvent(self, event):
         if self.is_processing_request: return
@@ -445,8 +446,8 @@ class MainWindow(PhysicsMovableWidget):
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.LeftButton and self.drag_position is not None:
-            pointer_screen = QApplication.screenAt(event.globalPosition().toPoint())
-            if pointer_screen and pointer_screen != self.current_screen: self.current_screen = pointer_screen
+            new_screen = QApplication.screenAt(event.globalPosition().toPoint())
+            if new_screen and new_screen != self.current_screen: self.current_screen = new_screen
             target_pos = event.globalPosition().toPoint() - self.drag_position
             
             if self.is_hooked:
@@ -478,11 +479,8 @@ class MainWindow(PhysicsMovableWidget):
         event.accept()
 
     def update_status(self, text, duration=0):
-        if self.config_window.isVisible():
-            self.config_window.hide()
-        
-        if text.endswith("...") and not self.is_processing_request:
-            self.is_processing_request = True
+        if self.config_window.isVisible(): self.config_window.hide()
+        if text.endswith("...") and not self.is_processing_request: self.is_processing_request = True
         
         self.notification_window.setText(text)
         self._position_sub_window(self.notification_window, self.pos())
@@ -493,9 +491,7 @@ class MainWindow(PhysicsMovableWidget):
     def _perform_reset_status(self):
         if self.is_processing_request or self.notification_window.isVisible(): return
         hotkey = self.user_config.get('hook_ocr_hotkey', 'phím tắt').upper()
-        if self.is_api_key_needed:
-            self.update_status("Wake up~")
-            self.update_status("Copy Gemini API key đi~")
+        if self.is_api_key_needed: self.update_status("Copy Gemini API key đi~")
         elif self.is_hooked: self.update_status(f"Nhấn '{hotkey}' để OCR.")
         elif self.user_config.get('process_text_clipboard', False): self.update_status("Yuuka: Copy text đi~")
         elif self.user_config.get('prompt_enabled', False): self.update_status("Yuuka: Prompt mode on!")
@@ -521,7 +517,6 @@ class MainWindow(PhysicsMovableWidget):
             
             dpi = get_screen_dpi_ratio(QPoint(win_rect_physical[0], win_rect_physical[1]))
             win_rect_logical = QRect(*(int(c / dpi) for c in (win_rect_physical[0], win_rect_physical[1], win_rect_physical[2]-win_rect_physical[0], win_rect_physical[3]-win_rect_physical[1])))
-            
             is_horizontally_aligned = my_rect.left() < win_rect_logical.right() and my_rect.right() > win_rect_logical.left()
             
             hook_prox_y = self.user_config.get("HOOK_PROXIMITY_Y", self.app_configs["HOOK_PROXIMITY_Y"])
@@ -551,7 +546,7 @@ class MainWindow(PhysicsMovableWidget):
         if edge == 'top':
             offset = self.user_config.get("HOOK_OFFSET_Y_TOP", self.app_configs["HOOK_OFFSET_Y_TOP"])
             target_y_phys = rect_physical[1] - self.height() * dpi + (offset * dpi)
-        else: # bottom
+        else:
             offset = self.user_config.get("HOOK_OFFSET_Y_BOTTOM", self.app_configs["HOOK_OFFSET_Y_BOTTOM"])
             target_y_phys = rect_physical[3] + (offset * dpi)
         
@@ -567,8 +562,7 @@ class MainWindow(PhysicsMovableWidget):
             print("Yuuka: Unhooked."); self.velocity_f += QPointF(0, -2)
             self.is_hooked = False; self.hooked_hwnd = None; self.hook_edge = None
             self.hooked_win_rect_physical = None; self.hook_offset_logical = QPoint(0,0)
-            self._reset_roi_state()
-            self.update_status("Yuuka: Cap ảnh/file đi~", 3000)
+            self._reset_roi_state(); self.update_status("Yuuka: Cap ảnh/file đi~", 3000)
             if self.config_window.isVisible(): self.config_window.hide()
 
     def maintain_hook_position(self):
@@ -591,7 +585,6 @@ class MainWindow(PhysicsMovableWidget):
                 
                 for sub_win in [self.result_window, self.notification_window]:
                     if sub_win.isVisible(): self._position_sub_window(sub_win, new_main_pos)
-                    
                 if self.selection_overlay.isVisible() and self.hooked_roi_logical:
                     new_overlay_pos = new_win_pos + self.overlay_relative_offset_logical
                     self.hooked_roi_logical.moveTo(new_overlay_pos)
@@ -616,32 +609,18 @@ class MainWindow(PhysicsMovableWidget):
             self.snipping_widget.show()
 
     def _on_snipping_cancelled(self):
-        if self.snipping_widget:
-            self.snipping_widget.close()
-            self.snipping_widget = None
-        self.show()
-        self.reset_status()
-        self.hook_timer.start(50)
+        if self.snipping_widget: self.snipping_widget.close(); self.snipping_widget = None
+        self.show(); self.reset_status(); self.hook_timer.start(50)
 
     def _on_area_selected(self, local_rect):
         if not self.snipping_widget: return
         global_rect = QRect(self.snipping_widget.mapToGlobal(local_rect.topLeft()), local_rect.size())
         
-        self.show()
-        self.snipping_widget.close()
-        self.snipping_widget = None
-        self.hook_timer.start(50)
-
-        if not self.is_hooked or not self.hooked_win_rect_physical:
-            self.reset_status()
-            return
-            
-        if global_rect.width() < 5 or global_rect.height() < 5: 
-            self.reset_status()
-            return
+        self.show(); self.snipping_widget.close(); self.snipping_widget = None; self.hook_timer.start(50)
+        if not self.is_hooked or not self.hooked_win_rect_physical: self.reset_status(); return
+        if global_rect.width() < 5 or global_rect.height() < 5: self.reset_status(); return
         
-        self.is_processing_request = True
-        self.update_status("Yuuka: Gemini đọc...")
+        self.is_processing_request = True; self.update_status("Yuuka: Gemini đọc...")
         self.hooked_roi_logical = global_rect
         dpi = get_screen_dpi_ratio(global_rect.center())
         win_top_left = QPoint(int(self.hooked_win_rect_physical[0] / dpi), int(self.hooked_win_rect_physical[1] / dpi))
@@ -651,9 +630,7 @@ class MainWindow(PhysicsMovableWidget):
         
         self.selection_overlay.setFixedSize(self.hooked_roi_logical.size())
         self.selection_overlay.move(self.hooked_roi_logical.topLeft())
-        self.selection_overlay.show()
-        
-        self.reset_status() 
+        self.selection_overlay.show(); self.reset_status() 
         self.requestHookedOCR.emit(QRect(self.hooked_roi_physical))
 
     def _reset_roi_state(self):
@@ -665,82 +642,63 @@ class MainWindow(PhysicsMovableWidget):
         if self.config_window.isVisible(): self.config_window.hide()
         else:
             if self.is_hooked: self.unhook()
-            api_info = {'key': self.last_known_api_key, 'verified': not self.is_api_key_needed}
-            # YUUKA: Truyền pixmap vào config window
+            api_info = {'key': self.last_known_api_key, 'verified': not self.is_api_key_needed, 'models': self.available_models}
             self.config_window.load_config(self.user_config, self.app_configs, api_info, self.base_ui_pixmap)
             self._position_sub_window(self.config_window, self.pos())
-            self.config_window.show()
-            self.config_window.activateWindow()
-            self.config_window.setFocus()
+            self.config_window.show(); self.config_window.activateWindow(); self.config_window.setFocus()
 
     def _position_sub_window(self, sub_window, main_window_pos):
         main_rect = QRect(main_window_pos, self.size())
-        # YUUKA FIX: Đảm bảo các sub-window (Result, Notification) có độ rộng tối thiểu là 200px
-        # nhưng vẫn sẽ mở rộng theo cửa sổ chính nếu nó lớn hơn.
         if not isinstance(sub_window, ConfigWindow):
-             width = max(200, main_rect.width())
+             main_w = main_rect.width()
+             sub_win_min_w = self.user_config.get('min_sub_win_width', 200)
+             width = max(sub_win_min_w, main_w)
              sub_window.setFixedWidth(width)
         sub_window.adjustSize()
         sub_size = sub_window.size()
 
-        pos_mode = self.user_config.get('sub_window_position', 'auto')
-        spacing = self.user_config.get('sub_window_spacing', 5)
+        pos_mode = self.user_config.get('sub_window_position', 'auto'); spacing = self.user_config.get('sub_window_spacing', 5)
         target_pos = QPoint()
+        effective_mode = 'up' if pos_mode == 'auto' and self.is_hooked and self.hook_edge == 'bottom' else ('down' if pos_mode == 'auto' else pos_mode)
 
-        effective_mode = pos_mode
-        if pos_mode == 'auto':
-            effective_mode = 'up' if self.is_hooked and self.hook_edge == 'bottom' else 'down'
-
-        if effective_mode == 'up':
-            target_pos.setX(main_rect.x() + (main_rect.width() - sub_size.width()) // 2)
-            target_pos.setY(main_rect.top() - sub_size.height() - spacing)
-        elif effective_mode == 'down':
-            target_pos.setX(main_rect.x() + (main_rect.width() - sub_size.width()) // 2)
-            target_pos.setY(main_rect.bottom() + spacing)
-        elif effective_mode == 'left':
-            target_pos.setX(main_rect.left() - sub_size.width() - spacing)
-            target_pos.setY(main_rect.y() + (main_rect.height() - sub_size.height()) // 2)
-        elif effective_mode == 'right':
-            target_pos.setX(main_rect.right() + spacing)
-            target_pos.setY(main_rect.y() + (main_rect.height() - sub_size.height()) // 2)
+        if effective_mode == 'up': target_pos.setX(main_rect.x() + (main_rect.width() - sub_size.width()) // 2); target_pos.setY(main_rect.top() - sub_size.height() - spacing)
+        elif effective_mode == 'down': target_pos.setX(main_rect.x() + (main_rect.width() - sub_size.width()) // 2); target_pos.setY(main_rect.bottom() + spacing)
+        elif effective_mode == 'left': target_pos.setX(main_rect.left() - sub_size.width() - spacing); target_pos.setY(main_rect.y() + (main_rect.height() - sub_size.height()) // 2)
+        elif effective_mode == 'right': target_pos.setX(main_rect.right() + spacing); target_pos.setY(main_rect.y() + (main_rect.height() - sub_size.height()) // 2)
         
         if sub_window is self.notification_window and self.result_window.isVisible():
             result_rect = self.result_window.geometry()
-            if effective_mode == 'down':
-                target_pos.setY(result_rect.bottom() + spacing)
-            elif effective_mode == 'up':
-                 target_pos.setY(result_rect.top() - sub_size.height() - spacing)
-        
+            if effective_mode == 'down': target_pos.setY(result_rect.bottom() + spacing)
+            elif effective_mode == 'up': target_pos.setY(result_rect.top() - sub_size.height() - spacing)
         elif sub_window is self.result_window and self.notification_window.isVisible():
-            noti_rect = self.notification_window.geometry()
-            sub_rect = QRect(target_pos, sub_size)
+            noti_rect = self.notification_window.geometry(); sub_rect = QRect(target_pos, sub_size)
             if effective_mode == 'down' and sub_rect.intersects(noti_rect):
-                new_noti_y = target_pos.y() + sub_size.height() + spacing
-                self.notification_window.set_animated_target(QPoint(noti_rect.x(), new_noti_y))
+                self.notification_window.set_animated_target(QPoint(noti_rect.x(), target_pos.y() + sub_size.height() + spacing))
             elif effective_mode == 'up' and sub_rect.intersects(noti_rect):
-                new_noti_y = target_pos.y() - noti_rect.height() - spacing
-                self.notification_window.set_animated_target(QPoint(noti_rect.x(), new_noti_y))
+                self.notification_window.set_animated_target(QPoint(noti_rect.x(), target_pos.y() - noti_rect.height() - spacing))
 
         if not sub_window.isVisible(): sub_window.move(target_pos)
         else: sub_window.set_animated_target(target_pos)
 
     def handle_api_key_needed(self):
-        self.is_api_key_needed = True; self.last_known_api_key = ""
-        self.config_window.update_api_key_status(self.last_known_api_key, False); self.reset_status()
+        self.is_api_key_needed = True; self.last_known_api_key = ""; self.available_models = []
+        self.config_window.update_api_key_status(self.last_known_api_key, False, []); self.reset_status()
+        
     def handle_api_key_failed(self, attempted_key):
-        self.is_api_key_needed = True; self.last_known_api_key = attempted_key
-        self.config_window.update_api_key_status(self.last_known_api_key, False); self.reset_status()
-    def handle_api_key_verified(self, key):
-        self.is_api_key_needed = False; self.last_known_api_key = key
-        self.config_window.update_api_key_status(key, True); self.update_status("Yuuka: Key OK!", 3000)
+        self.is_api_key_needed = True; self.last_known_api_key = attempted_key; self.available_models = []
+        self.config_window.update_api_key_status(self.last_known_api_key, False, [])
+        if not self.config_window.isVisible(): self.reset_status()
+        
+    def handle_api_key_verified(self, key, models):
+        self.is_api_key_needed = False; self.last_known_api_key = key; self.available_models = models
+        self.config_window.update_api_key_status(key, True, models)
+        if not self.config_window.isVisible():
+            self.update_status("Yuuka: Key OK!", 3000)
+
     def handle_processing_complete(self): self.is_processing_request = False; self.reset_status()
     
     def handle_show_result(self, result_text):
-        if self.config_window.isVisible():
-            self.config_window.hide()
-
+        if self.config_window.isVisible(): self.config_window.hide()
         self.result_window.setText(result_text)
         self._position_sub_window(self.result_window, self.pos())
-        self.result_window.show()
-        self.result_window.activateWindow()
-        self.result_window.text_edit.setFocus()
+        self.result_window.show(); self.result_window.activateWindow(); self.result_window.text_edit.setFocus()

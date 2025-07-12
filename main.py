@@ -62,7 +62,6 @@ def main():
     main_window.requestHookedOCR.connect(gemini_plugin.handle_hooked_ocr_request)
     main_window.requestApiKeyVerification.connect(gemini_plugin.handle_api_key_attempt)
     main_window.userConfigChanged.connect(gemini_plugin.handle_user_config_changed)
-    # NEW: Connect the file drop signal to the plugin's handler
     main_window.requestFileProcessing.connect(gemini_plugin.handle_file_drop_request)
     
     main_window.show()
