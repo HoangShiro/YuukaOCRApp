@@ -60,7 +60,8 @@ def main():
     # Tải cấu hình người dùng trước để kiểm tra cài đặt auto-update
     user_config = load_configs(USER_CONFIG_FILENAME)
     if user_config.get('auto_update_enabled', True):
-        status, message = update.check_for_updates()
+        # YUUKA FIX: Nhận 3 giá trị trả về từ check_for_updates
+        status, message, _ = update.check_for_updates()
         if status == update.UPDATE_STATUS['AHEAD']:
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Information)
@@ -98,7 +99,6 @@ def main():
     gemini_plugin.apiKeyNeeded.connect(main_window.handle_api_key_needed)
     gemini_plugin.apiKeyFailed.connect(main_window.handle_api_key_failed)
     
-    # YUUKA FIX: Kết nối các tín hiệu quản lý trạng thái mới.
     gemini_plugin.processingStarted.connect(main_window.handle_processing_started)
     gemini_plugin.processingComplete.connect(main_window.handle_processing_complete)
 
@@ -113,5 +113,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# Test App
