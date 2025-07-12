@@ -448,7 +448,7 @@ class ConfigWindow(PhysicsMovableWidget):
             #dropZone {{ border: 2px dashed {accent_color}88; border-radius: 5px; padding: 10px; color: {text_color}aa; }}
             #uiPreview {{ border: none; padding: 5px; margin-top: 5px; color: {text_color}aa; }}
             
-            QGroupBox {{ border: 1px solid {accent_color}66; border-radius: 5px; margin-top: 1ex; color: {accent_color}; font-weight: bold; padding: 5px; }}
+            QGroupBox {{ border: 1px solid {accent_color}66; border-radius: 5px; margin-top: 1ex; color: {text_color}; font-weight: bold; padding: 5px; }}
             QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top center; padding: 0 3px; background-color: {bg_color_str}; }}
             
             QLabel, QCheckBox {{ color: {text_color}; font-family: "{font_family}"; font-size: {font_size}pt; font-weight: normal; }}
