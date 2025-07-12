@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (QTextEdit, QVBoxLayout, QWidget, QApplication, QCheckBox,
                                QLabel, QFrame, QLineEdit, QPushButton, QHBoxLayout, QColorDialog,
                                QFontComboBox, QSpinBox, QSlider, QGridLayout, QButtonGroup,
-                               QSizePolicy, QFileDialog)
+                               QSizePolicy, QFileDialog, QAbstractItemView)
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QDragEnterEvent, QMouseEvent, QKeyEvent, QPixmap
 from PySide6.QtCore import Qt, Signal, QRect, QPoint, QUrl, QEvent, QTimer
 
@@ -128,6 +128,7 @@ class ThemedSubWindow(PhysicsMovableWidget):
         self.container_layout.addWidget(self.text_edit)
         self.setLayout(self.container_layout)
         self.setMaximumHeight(600)
+        self.setMinimumWidth(200) # YUUKA: Đặt độ rộng tối thiểu cho các sub-window
     
     def apply_stylesheet(self, theme_config):
         bg = theme_config.get('sub_win_bg', 'rgba(30, 30, 30, 245)')
@@ -196,6 +197,8 @@ class ConfigWindow(PhysicsMovableWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
         
         self.constrain_to_screen = False
+        self.setMinimumWidth(900) # YUUKA: Đặt độ rộng tối thiểu cho cửa sổ config để vừa 3 cột
+        self.drag_pos = None # YUUKA: Thêm biến để kéo cửa sổ color picker
         
         self.current_pos_mode = 'auto'
         self.container = QWidget(self); self.container.setObjectName("container")
@@ -360,6 +363,15 @@ class ConfigWindow(PhysicsMovableWidget):
             #pos_button:checked {{ background-color: {accent_color}; border-color: {text_color}; }}
             QSlider::groove:horizontal {{ border: 1px solid {accent_color}55; height: 3px; background: {accent_color}33; border-radius: 2px; }}
             QSlider::handle:horizontal {{ background: {text_color}; border: 1px solid {accent_color}; width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; }}
+            /* YUUKA: Style cho dropdown của QFontComboBox và các view tương tự */
+            QAbstractItemView {{
+                background-color: {bg_color_str};
+                color: {text_color};
+                border: 1px solid {accent_color};
+                selection-background-color: {accent_color};
+                selection-color: {text_color}; /* Màu chữ khi được chọn */
+                padding: 4px;
+            }}
         """)
         self.theme_accent_preview.setStyleSheet(f"background-color: {accent_color}; border: 1px solid {text_color}44; color: {text_color};"); self.theme_accent_preview.setText(accent_color)
         self.theme_bg_preview.setStyleSheet(f"background-color: {bg_color_str}; border: 1px solid {accent_color}; color: {text_color};"); self.theme_bg_preview.setText(bg_color_str)
@@ -410,19 +422,102 @@ class ConfigWindow(PhysicsMovableWidget):
              initial_color = QColor("#000000")
 
         dialog = QColorDialog(self)
-        
-        if color_type == 'bg': dialog.setOption(QColorDialog.ShowAlphaChannel)
-        color = dialog.getColor(initial_color, self, f"Chọn màu {color_type}")
+        dialog.setOption(QColorDialog.DontUseNativeDialog, True)
+        dialog.setCurrentColor(initial_color)
 
-        if color.isValid():
-            if color.alpha() < 255 and color_type == 'bg': 
-                new_color_str = color.name(QColor.NameFormat.HexArgb)
-            else: 
-                new_color_str = color.name()
-            
-            preview_button.setText(new_color_str)
-            self._emit_changes()
-    
+        # YUUKA: Bật alpha channel nếu là chọn màu nền
+        if color_type == 'bg':
+            dialog.setOption(QColorDialog.ShowAlphaChannel, True)
+
+        # --- YUUKA FIX: Tạo khung cửa sổ tùy chỉnh cho Color Dialog ---
+        dialog.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
+        
+        # Tạo thanh tiêu đề tùy chỉnh
+        title_bar = QWidget(dialog)
+        title_bar.setObjectName("customTitleBar")
+        title_bar_layout = QHBoxLayout(title_bar)
+        title_bar_layout.setContentsMargins(10, 5, 5, 5)
+        title_label = QLabel(f"Chọn màu {color_type}", title_bar)
+        title_label.setObjectName("customTitleLabel")
+        close_button = QPushButton("✕", title_bar)
+        close_button.setObjectName("customCloseButton")
+        close_button.clicked.connect(dialog.reject)
+        title_bar_layout.addWidget(title_label)
+        title_bar_layout.addStretch()
+        title_bar_layout.addWidget(close_button)
+        
+        # Thêm chức năng kéo thả cho thanh tiêu đề
+        def mouse_press(event):
+            if event.button() == Qt.LeftButton:
+                self.drag_pos = event.globalPosition().toPoint() - dialog.pos()
+                event.accept()
+        def mouse_move(event):
+            if event.buttons() == Qt.LeftButton and self.drag_pos:
+                dialog.move(event.globalPosition().toPoint() - self.drag_pos)
+                event.accept()
+        def mouse_release(_):
+            self.drag_pos = None
+        title_bar.mousePressEvent = mouse_press
+        title_bar.mouseMoveEvent = mouse_move
+        title_bar.mouseReleaseEvent = mouse_release
+        
+        # Chèn thanh tiêu đề vào layout của dialog
+        dialog.layout().insertWidget(0, title_bar)
+        # --- KẾT THÚC FIX ---
+        
+        # Lấy theme hiện tại và áp dụng cho dialog
+        theme_config = self.parent().user_config.get('theme', {})
+        accent_color = theme_config.get('accent_color', '#E98973')
+        bg_color_str = theme_config.get('sub_win_bg', 'rgba(30, 30, 30, 245)')
+        text_color = theme_config.get('sub_win_text', '#FFFFFF')
+        bg_qcolor = QColor(bg_color_str)
+        btn_bg = (bg_qcolor.lighter(130).name() if bg_qcolor.lightnessF() < 0.5 else bg_qcolor.darker(115).name())
+        btn_hover = (bg_qcolor.lighter(160).name() if bg_qcolor.lightnessF() < 0.5 else bg_qcolor.darker(130).name())
+
+        dialog_style = f"""
+            QDialog {{ 
+                background-color: {bg_color_str}; 
+                border: 1px solid {accent_color};
+                border-radius: 8px;
+            }}
+            #customTitleBar {{ background: transparent; }}
+            #customTitleLabel {{ color: {text_color}; font-weight: bold; }}
+            #customCloseButton {{ 
+                font-family: "Segoe UI Symbol"; font-size: 14px; color: {text_color};
+                background: transparent; border: none; padding: 0px 5px; 
+                min-width: 20px; max-width: 20px;
+            }}
+            #customCloseButton:hover {{ background-color: #E81123; color: white; border-radius: 4px; }}
+            QColorDialog, QColorDialog * {{ color: {text_color}; }}
+            QColorDialog #qt_color_patch, QColorDialog #qt_color_new_patch, 
+            QColorDialog #qt_color_luma, QColorDialog #qt_color_alpha {{ 
+                border: 1px solid {text_color}44; border-radius: 4px; 
+            }}
+            QColorDialog QLabel, QColorDialog QRadioButton {{ color: {text_color}; }}
+            QColorDialog QSpinBox, QColorDialog QLineEdit {{
+                color: {text_color}; background-color: rgba(0,0,0,0.2);
+                border: 1px solid {accent_color}88; border-radius: 4px; padding: 2px;
+            }}
+            QColorDialog QPushButton {{
+                color: {text_color}; background-color: {btn_bg};
+                border: 1px solid {accent_color}88; border-radius: 4px;
+                padding: 5px 10px; min-width: 60px;
+            }}
+            QColorDialog QPushButton:hover {{ background-color: {btn_hover}; }}
+            QColorDialog QPushButton:default {{ border: 2px solid {accent_color}; }}
+        """
+        dialog.setStyleSheet(dialog_style)
+
+        if dialog.exec():
+            color = dialog.currentColor()
+            if color.isValid():
+                if color.alpha() < 255 and color_type == 'bg':
+                    new_color_str = color.name(QColor.NameFormat.HexArgb)
+                else:
+                    new_color_str = color.name()
+                preview_button.setText(new_color_str)
+                self._emit_changes()
+
     def load_config(self, config_data, app_configs, api_key_info, base_pixmap):
         for widget in self.findChildren(QWidget): widget.blockSignals(True)
         self.text_clipboard_cb.setChecked(config_data.get('process_text_clipboard', False))
@@ -458,9 +553,10 @@ class ConfigWindow(PhysicsMovableWidget):
             self.ui_preview_label.setText("Không có giao diện")
             return
         
-        # YUUKA FIX: Scale the pixmap to fit the preview label's constrained width
         preview_width = self.ui_preview_label.width() - 10 # Trừ padding
         if preview_width > 10:
+            # YUUKA: Sử dụng SmoothTransformation để đảm bảo giao diện preview
+            # được hiển thị mượt mà, chống răng cưa, đặc biệt trên màn hình HiDPI.
             scaled_pixmap = pixmap.scaledToWidth(preview_width, Qt.SmoothTransformation)
             self.ui_preview_label.setPixmap(scaled_pixmap)
             self.ui_preview_label.setText("") 

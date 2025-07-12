@@ -673,8 +673,11 @@ class MainWindow(PhysicsMovableWidget):
 
     def _position_sub_window(self, sub_window, main_window_pos):
         main_rect = QRect(main_window_pos, self.size())
+        # YUUKA FIX: Đảm bảo các sub-window (Result, Notification) có độ rộng tối thiểu là 200px
+        # nhưng vẫn sẽ mở rộng theo cửa sổ chính nếu nó lớn hơn.
         if not isinstance(sub_window, ConfigWindow):
-             sub_window.setFixedWidth(main_rect.width())
+             width = max(200, main_rect.width())
+             sub_window.setFixedWidth(width)
         sub_window.adjustSize()
         sub_size = sub_window.size()
 
