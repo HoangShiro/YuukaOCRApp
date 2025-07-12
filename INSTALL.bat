@@ -1,9 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: Dat tieu de cho cua so lenh
-title Yuuka OCR - Installation & Setup
-
 :: --- Step 0: Auto-update via Git ---
 echo Yuuka: Checking for updates...
 :: Kiem tra xem git co duoc cai dat khong
