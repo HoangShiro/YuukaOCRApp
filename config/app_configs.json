@@ -1,0 +1,17 @@
+{
+    "HOOK_PROXIMITY_Y": 80,
+    "HOOK_PROXIMITY_Y_BOTTOM": 100,
+    "HOOK_OFFSET_Y_TOP": 0,
+    "HOOK_OFFSET_Y_BOTTOM": -50,
+    "UNHOOK_DISTANCE": 100,
+    "UI_FILENAME": "ui.png",
+    "CLOSE_BUTTON_COLOR_RGB": [233, 115, 158],
+    "CONFIG_BUTTON_COLOR_RGB": [233, 137, 115],
+    "TEXT_COLOR": "#FFFFFF",
+    "ACCEPTED_FILE_EXTENSIONS": [".pdf", ".mp3", ".wav", ".m4a", ".flac", ".ogg", ".jpeg", ".jpg", ".png", ".gif", ".bmp", ".tiff", ".ico", ".webp"],
+    "MAX_FILE_SIZE_MB": 100,
+    "PHYSICS_SPRING_CONSTANT": 0.1,
+    "PHYSICS_DAMPING_FACTOR": 0.45,
+    "PHYSICS_BOUNCE_DAMPING_FACTOR": 0.3,
+    "HOOK_OCR_HOTKEY": "middle"
+}
