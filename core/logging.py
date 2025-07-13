@@ -59,14 +59,23 @@ class Logger(QObject):
                 with open(self.log_path, 'w', encoding='utf-8') as f:
                     json.dump(log_copy, f, ensure_ascii=False, indent=4)
             except IOError as e:
-                print(f"Lỗi nghiêm trọng khi lưu log: {e}")
+                # YUUKA: Nếu không thể ghi file, in ra console gốc (nếu có)
+                if sys.__stderr__:
+                    sys.__stderr__.write(f"Lỗi nghiêm trọng khi lưu log: {e}\n")
 
     def console_log(self, message: str):
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_message = f"[{timestamp}] Yuuka: {message}\n"
+        
+        # Signal này là cơ chế chính để hiển thị log trong UI, luôn hoạt động
         self.message_logged.emit(formatted_message)
-        sys.__stdout__.write(formatted_message)
-        sys.__stdout__.flush()
+
+        # YUUKA FIX: Chỉ ghi ra console hệ thống NẾU nó tồn tại.
+        # Điều này ngăn ngừa lỗi 'NoneType' object has no attribute 'write'
+        # khi chạy với pythonw.exe (không có console).
+        if sys.__stdout__:
+            sys.__stdout__.write(formatted_message)
+            sys.__stdout__.flush()
 
     def get_logs(self):
         with self.lock:

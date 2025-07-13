@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
+*.log
 # User-specific directory
 # This single line ignores the entire 'user' folder and everything inside it.
 user/

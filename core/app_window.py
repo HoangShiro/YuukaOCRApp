@@ -173,17 +173,6 @@ class MainWindow(PhysicsMovableWidget):
         self.session_timer = QElapsedTimer()
         self.session_timer.start()
 
-        self._load_user_config()
-        
-        physics_cfg = self._get_current_physics_config()
-        super().__init__(physics_config=physics_cfg)
-
-        self.config_window = ConfigWindow(self, physics_cfg, self.logger)
-        self.result_window = ResultDisplayWindow(self, physics_cfg)
-        self.notification_window = NotificationWindow(self, physics_cfg)
-        self.snipping_widget = None
-        self.selection_overlay = SelectionOverlayWidget(self, physics_cfg)
-
         self.drag_position = None
         self.is_api_key_needed = True
         self.last_known_api_key = ""
@@ -198,8 +187,19 @@ class MainWindow(PhysicsMovableWidget):
         self.overlay_relative_offset_logical = QPoint()
         self.is_processing_request = False
         self.SCALE_LEVELS = [i for i in range(10, 101, 10)] 
-
         self.hotkey_listener = None
+        # Kết thúc khối di chuyển
+
+        self._load_user_config()
+        
+        physics_cfg = self._get_current_physics_config()
+        super().__init__(physics_config=physics_cfg)
+
+        self.config_window = ConfigWindow(self, physics_cfg, self.logger)
+        self.result_window = ResultDisplayWindow(self, physics_cfg)
+        self.notification_window = NotificationWindow(self, physics_cfg)
+        self.snipping_widget = None
+        self.selection_overlay = SelectionOverlayWidget(self, physics_cfg)
 
         self.setup_ui()
         self.connect_internal_signals()
@@ -210,9 +210,6 @@ class MainWindow(PhysicsMovableWidget):
         
         self.start_hotkey_listener()
 
-        # YUUKA: THAY ĐỔI LOGIC KHỞI ĐỘNG
-        # 1. Đặt một trạng thái trung lập ban đầu.
-        # 2. Không gọi reset_status() ngay lập tức, vì chưa biết trạng thái key.
         self.update_status(".....")
         self.update_status("Waking up...")
 
