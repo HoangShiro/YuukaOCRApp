@@ -201,6 +201,11 @@ class MainWindow(PhysicsMovableWidget):
         self.snipping_widget = None
         self.selection_overlay = SelectionOverlayWidget(self, physics_cfg)
 
+        # YUUKA FIX: Tạo một timer chuyên dụng để quản lý việc ẩn notification
+        self.notification_hide_timer = QTimer(self)
+        self.notification_hide_timer.setSingleShot(True)
+        self.notification_hide_timer.timeout.connect(self.notification_window.hide)
+
         self.setup_ui()
         self.connect_internal_signals()
         self.start_timers()
@@ -210,7 +215,6 @@ class MainWindow(PhysicsMovableWidget):
         
         self.start_hotkey_listener()
 
-        # YUUKA: Chỉ hiển thị thông báo "Waking up..." trong 2 giây để tránh treo
         self.update_status("Waking up...", 2000)
 
     def _get_current_physics_config(self):
@@ -244,7 +248,6 @@ class MainWindow(PhysicsMovableWidget):
         self.move(QPoint(last_pos_config['x'], last_pos_config['y']))
         self.current_pos_f = QPointF(self.pos())
         self.target_pos_f = QPointF(self.pos())
-        # YUUKA: Bỏ self.reset_status() ở đây.
 
     def connect_internal_signals(self):
         self.config_window.config_changed.connect(self._on_config_changed)
@@ -502,12 +505,20 @@ class MainWindow(PhysicsMovableWidget):
             self._save_user_config(from_config_window=False)
         event.accept()
 
+    # YUUKA FIX: Cập nhật hàm này để quản lý timer đúng cách
     def update_status(self, text, duration=0):
         if self.config_window.isVisible(): self.config_window.hide()
+
+        # Dừng timer cũ trước khi hiển thị thông báo mới
+        self.notification_hide_timer.stop()
+
         self.notification_window.setText(text)
         self._position_sub_window(self.notification_window, self.pos())
         self.notification_window.show()
-        if duration > 0: QTimer.singleShot(duration, self.notification_window.hide)
+
+        # Chỉ khởi động timer mới nếu duration > 0
+        if duration > 0:
+            self.notification_hide_timer.start(duration)
 
     def reset_status(self): QTimer.singleShot(50, self._perform_reset_status)
     
@@ -731,14 +742,11 @@ class MainWindow(PhysicsMovableWidget):
     def handle_api_key_needed(self):
         self.is_api_key_needed = True; self.last_known_api_key = ""; self.available_models = []
         self.config_window.update_api_key_status(self.last_known_api_key, False, [])
-        # YUUKA FIX: Trực tiếp cập nhật trạng thái thay vì gọi reset_status() bị chặn.
-        # Thông báo này là trạng thái mặc định mới, nên không cần timeout.
         self.update_status("Copy Gemini API key đi~")
         
     def handle_api_key_failed(self, attempted_key):
         self.is_api_key_needed = True; self.last_known_api_key = attempted_key; self.available_models = []
         self.config_window.update_api_key_status(self.last_known_api_key, False, [])
-        # YUUKA FIX: Hiển thị lỗi ngay lập tức, sau đó một lúc mới reset về trạng thái "Copy key"
         self.update_status("Key không hợp lệ!", 3000)
         QTimer.singleShot(3100, self.reset_status)
         
@@ -747,10 +755,8 @@ class MainWindow(PhysicsMovableWidget):
         self.config_window.update_api_key_status(key, True, models)
         if not self.config_window.isVisible():
             self.update_status("Key OK!", 2000)
-            # Sau khi hiển thị "Key OK!", đợi một chút rồi mới reset về trạng thái chờ mặc định.
             QTimer.singleShot(2100, self.reset_status)
         else:
-            # Nếu cửa sổ config đang mở thì không cần làm gì thêm.
             pass
 
     def handle_processing_started(self):
