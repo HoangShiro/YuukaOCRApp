@@ -3,10 +3,10 @@ import sys
 import os
 import json
 import subprocess
-import threading
+import time
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
@@ -15,11 +15,13 @@ if project_root not in sys.path:
 from core import update
 from core.app_window import MainWindow
 from plugins.gemini_ocr import GeminiOCRPlugin
+from core.logging import Logger
 
 CONFIG_DIR = "config"
 USER_DIR = "user"
 APP_CONFIG_FILENAME = os.path.join(CONFIG_DIR, "app_configs.json")
 USER_CONFIG_FILENAME = os.path.join(USER_DIR, "user_config.json")
+LOG_FILENAME = os.path.join(USER_DIR, "log.json")
 ENV_FILENAME = os.path.join(USER_DIR, ".env")
 
 def load_configs(filepath):
@@ -27,10 +29,9 @@ def load_configs(filepath):
         with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {} # Trả về dict rỗng nếu file không tồn tại hoặc lỗi
+        return {} 
 
 def run_install_and_exit():
-    """Chạy INSTALL.bat và thoát ứng dụng hiện tại."""
     install_bat_path = os.path.abspath("INSTALL.bat")
     if os.path.exists(install_bat_path):
         try:
@@ -43,26 +44,28 @@ def run_install_and_exit():
     sys.exit(0)
     
 def restart_application():
-    """Khởi động lại ứng dụng bằng cách chạy RUN.bat và thoát process hiện tại."""
     print("Yuuka: Restarting application...")
     run_bat_path = os.path.abspath("RUN.bat")
     if os.path.exists(run_bat_path):
         subprocess.Popen([run_bat_path], shell=True)
     else:
-        # Fallback nếu không có RUN.bat
         subprocess.Popen([sys.executable] + sys.argv, shell=True)
     QApplication.quit()
 
 
 def main():
     app = QApplication(sys.argv)
-
-    # Tải cấu hình người dùng trước để kiểm tra cài đặt auto-update
+    
+    # Logger giờ là QObject, phải được tạo sau QApplication
+    logger = Logger(LOG_FILENAME)
+    # Tạm thời print ra console gốc trước khi logger sẵn sàng
+    print(f"[{time.strftime('%H:%M:%S')}] Yuuka: Ứng dụng đang khởi động...")
+    
     user_config = load_configs(USER_CONFIG_FILENAME)
     if user_config.get('auto_update_enabled', True):
-        # YUUKA FIX: Nhận 3 giá trị trả về từ check_for_updates
         status, message, _ = update.check_for_updates()
         if status == update.UPDATE_STATUS['AHEAD']:
+            logger.console_log("Phát hiện phiên bản mới, bắt đầu cập nhật.")
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Information)
             msg_box.setText("Có phiên bản Yuuka mới!")
@@ -70,7 +73,7 @@ def main():
             msg_box.setWindowTitle("Đang cập nhật")
             msg_box.setStandardButtons(QMessageBox.Ok)
             msg_box.show()
-            QApplication.processEvents() # Đảm bảo messagebox hiện ra
+            QApplication.processEvents()
             
             update.perform_update()
             run_install_and_exit()
@@ -83,11 +86,19 @@ def main():
 
     app_configs = load_configs(APP_CONFIG_FILENAME)
     if not app_configs:
-         print(f"Yuuka: Lỗi! Không thể tải file cấu hình chính: {APP_CONFIG_FILENAME}")
+         logger.console_log(f"LỖI NGHIÊM TRỌNG! Không thể tải file cấu hình chính: {APP_CONFIG_FILENAME}")
          sys.exit(1)
 
-    main_window = MainWindow(app_configs, USER_CONFIG_FILENAME)
-    gemini_plugin = GeminiOCRPlugin(USER_CONFIG_FILENAME, app_configs)
+    runtime_timer = QTimer()
+    runtime_timer.timeout.connect(logger.update_runtime)
+    runtime_timer.start(60000)
+    app.aboutToQuit.connect(logger.update_runtime)
+
+    main_window = MainWindow(app_configs, USER_CONFIG_FILENAME, logger)
+    gemini_plugin = GeminiOCRPlugin(USER_CONFIG_FILENAME, app_configs, logger)
+
+    # KẾT NỐI VÀNG: Kết nối signal của Logger tới slot của ConfigWindow một cách an toàn
+    logger.message_logged.connect(main_window.config_window.append_to_console_display)
 
     # --- Kết nối Signals và Slots ---
     main_window.config_window.requestRestart.connect(restart_application)
@@ -109,6 +120,7 @@ def main():
     
     main_window.show()
 
+    logger.console_log("Giao diện chính đã được hiển thị.")
     sys.exit(app.exec())
 
 if __name__ == "__main__":

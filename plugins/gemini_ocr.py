@@ -17,6 +17,7 @@ except ImportError:
     print("Yuuka: Vui lòng cài đặt bằng lệnh: pip install pywin32 pillow google-generativeai python-dotenv")
 
 from PySide6.QtCore import QTimer, QObject, Signal, QRect
+from core.logging import Logger # YUUKA: Import Logger
 
 class GeminiOCRPlugin(QObject):
     updateStatus = Signal(str, int)
@@ -29,10 +30,11 @@ class GeminiOCRPlugin(QObject):
     processingStarted = Signal()
     processingComplete = Signal()
 
-    def __init__(self, user_config_path, app_configs):
+    def __init__(self, user_config_path, app_configs, logger: Logger): # YUUKA: Nhận logger
         super().__init__()
         self.user_config_path = user_config_path
         self.app_configs = app_configs
+        self.logger = logger # YUUKA: Lưu logger
         self.user_config = {}
         self._load_user_config()
 
@@ -53,7 +55,7 @@ class GeminiOCRPlugin(QObject):
                 with open(self.user_config_path, 'r', encoding='utf-8') as f:
                     self.user_config = json.load(f)
         except Exception as e:
-            print(f"Yuuka Plugin: Lỗi đọc user config: {e}")
+            self.logger.console_log(f"Plugin: Lỗi đọc user config: {e}")
         return {}
 
     def _get_user_config_value(self, key, default=None):
@@ -87,26 +89,27 @@ class GeminiOCRPlugin(QObject):
             
             self.api_key = key
             self._update_model()
-            print("Yuuka Plugin: Đã kết nối với Gemini API thành công!")
+            self.logger.console_log("Đã kết nối với Gemini API thành công!")
             self.apiKeyVerified.emit(key, sorted(models_list, reverse=True))
 
         except (google_exceptions.PermissionDenied, google_exceptions.Unauthenticated, ValueError) as e:
-            print(f"Yuuka Plugin: Lỗi cấu hình Gemini! Key có thể không hợp lệ. Lỗi: {e}")
+            error_msg = f"Lỗi cấu hình Gemini! Key có thể không hợp lệ. Lỗi: {e}"
+            self.logger.console_log(error_msg)
             self.api_key = None; self.model = None; self.apiKeyFailed.emit(key)
         except Exception as e:
-            print(f"Yuuka Plugin: Lỗi không xác định khi cấu hình Gemini. Lỗi: {e}")
+            error_msg = f"Lỗi không xác định khi cấu hình Gemini. Lỗi: {e}"
+            self.logger.console_log(error_msg)
             self.api_key = None; self.model = None; self.apiKeyFailed.emit(key)
 
     def _update_model(self):
         model_name = self._get_user_config_value('gemini_model', 'gemini-1.5-flash')
         try:
             if self.model is None or self.model.model_name != f"models/{model_name}":
-                print(f"Yuuka Plugin: Đang sử dụng model '{model_name}'")
+                self.logger.console_log(f"Đang sử dụng model '{model_name}'")
                 self.model = genai.GenerativeModel(model_name, generation_config={"response_mime_type": "application/json"})
         except Exception as e:
-            print(f"Yuuka Plugin: Không thể khởi tạo model '{model_name}'. Lỗi: {e}")
+            self.logger.console_log(f"Không thể khởi tạo model '{model_name}'. Lỗi: {e}")
             self.updateStatus.emit(f"Lỗi model: {model_name}", 4000)
-
 
     def handle_api_key_attempt(self, key):
         if not self.model or self.api_key != key:
@@ -126,6 +129,7 @@ class GeminiOCRPlugin(QObject):
             img = ImageGrab.grabclipboard()
             if isinstance(img, (Image.Image, PngImagePlugin.PngImageFile)) and self._is_new_content(img.tobytes()):
                 self.last_clipboard_content = img.tobytes()
+                self.logger.log_source("image_clipboard") # YUUKA: Log source
                 threading.Thread(target=self._process_with_error_handling, args=(self.process_image_in_thread, img), daemon=True).start()
                 return
         except Exception: pass
@@ -138,6 +142,7 @@ class GeminiOCRPlugin(QObject):
                     if files and self._is_new_content(files[0]):
                         self.last_clipboard_content = files[0]
                         if self._is_valid_file(self.last_clipboard_content):
+                            self.logger.log_source("file_clipboard", self.last_clipboard_content) # YUUKA: Log source
                             threading.Thread(target=self._process_with_error_handling, args=(self.process_file_in_thread, self.last_clipboard_content), daemon=True).start()
                             try: win32clipboard.CloseClipboard()
                             except Exception: pass
@@ -152,6 +157,7 @@ class GeminiOCRPlugin(QObject):
                 cb_text = pyperclip.paste()
                 if cb_text and cb_text.strip() and self._is_new_content(cb_text):
                     self.last_clipboard_content = cb_text
+                    self.logger.log_source("text_clipboard") # YUUKA: Log source
                     threading.Thread(target=self._process_with_error_handling, args=(self.process_text_in_thread, cb_text), daemon=True).start()
             except Exception: pass
 
@@ -168,10 +174,12 @@ class GeminiOCRPlugin(QObject):
     def _get_combined_prompt(self, base_prompt):
         if self._get_user_config_value('prompt_enabled', False):
             custom_prompt = self._get_user_config_value('custom_prompt', '').strip()
+            # YUUKA: Log prompt mới
+            self.logger.add_recent_prompt(custom_prompt)
             if custom_prompt: return f"{base_prompt}\n\nAdditionally, strictly follow this user instruction: {custom_prompt}"
         return base_prompt
 
-    def process_and_copy_result(self, response):
+    def process_and_copy_result(self, response, model_name):
         try:
             clean_text = response.text.strip()
             if clean_text.startswith("```json"): clean_text = clean_text[7:-3].strip()
@@ -191,14 +199,23 @@ class GeminiOCRPlugin(QObject):
                          data = {"extracted_text": extracted}
                 if not data: raise
             result_text = data.get("extracted_text", "") if data else ""
-            if not result_text: self.updateStatus.emit("Yuuka: Hông thấy chữ...", 3000); self.processingComplete.emit(); return
+            if not result_text: 
+                self.updateStatus.emit("Yuuka: Hông thấy chữ...", 3000)
+                # YUUKA: Vẫn log là thành công vì API đã trả về, chỉ là không có nội dung
+                self.logger.log_api_call(model_name, success=True)
+                self.processingComplete.emit()
+                return
+
+            self.logger.log_api_call(model_name, success=True)
+            self.logger.add_recent_output(result_text)
             self.just_copied_by_yuuka = True; pyperclip.copy(result_text)
             self.last_clipboard_content = result_text
             self.showResult.emit(result_text)
             self.updateStatus.emit("Yuuka: Ctrl + v đi!", 3000)
         except Exception as e:
             failed_text = response.text if hasattr(response, 'text') else str(response)
-            print(f"Yuuka Plugin: Lỗi JSON hoặc xử lý. Response: {failed_text}. Lỗi: {e}")
+            error_msg = f"Lỗi JSON hoặc xử lý. Response: {failed_text}. Lỗi: {e}"
+            self.logger.log_api_call(model_name, success=False, error_message=error_msg)
             self.updateStatus.emit("Yuuka: Lỗi response...", 3000)
         finally: self.processingComplete.emit()
 
@@ -213,45 +230,52 @@ class GeminiOCRPlugin(QObject):
                 return
             target_func(*args)
         except Exception as e:
+            error_msg = f"Lỗi trong thread {target_func.__name__}: {e}"
+            self.logger.log_api_call(self.model.model_name, success=False, error_message=error_msg)
             self.updateStatus.emit(f"Yuuka: Lỗi! {str(e)[:40]}...", 3000)
-            print(f"Yuuka Plugin: Lỗi trong thread {target_func.__name__}: {e}")
             self.processingComplete.emit()
 
     def process_image_in_thread(self, img):
         if img.mode == 'RGBA': img = img.convert('RGB')
         prompt = self._get_combined_prompt('Extract all text from this image. Respond in a strict JSON format like this: {"extracted_text": "all the text you found"}.')
-        response = self.model.generate_content([prompt, img]); self.process_and_copy_result(response)
+        response = self.model.generate_content([prompt, img]); self.process_and_copy_result(response, self.model.model_name)
 
     def process_file_in_thread(self, filepath):
         self.updateStatus.emit("Yuuka: Uploading file...", 0)
         uploaded_file = genai.upload_file(path=filepath)
         self.updateStatus.emit("Yuuka: Đợi chút nha...", 0)
         prompt = self._get_combined_prompt('Analyze this file and extract all text from it. Respond in a strict JSON format like this: {"extracted_text": "all the text you found"}.')
-        response = self.model.generate_content([prompt, uploaded_file]); self.process_and_copy_result(response)
+        response = self.model.generate_content([prompt, uploaded_file]); self.process_and_copy_result(response, self.model.model_name)
 
     def process_text_in_thread(self, text_content):
         prompt = self._get_combined_prompt('Process the following text. If a user instruction is provided, follow it. Otherwise, summarize the text. Respond in a strict JSON format like this: {"extracted_text": "your complete response here"}.')
-        response = self.model.generate_content([prompt, text_content]); self.process_and_copy_result(response)
+        response = self.model.generate_content([prompt, text_content]); self.process_and_copy_result(response, self.model.model_name)
 
     def process_hooked_region_in_thread(self, physical_roi_rect):
+        self.logger.log_source("hooked_ocr") # YUUKA: Log source
         bbox = (physical_roi_rect.x(), physical_roi_rect.y(), physical_roi_rect.right() + 1, physical_roi_rect.bottom() + 1)
         img = ImageGrab.grab(bbox=bbox, all_screens=True)
         if img.mode == 'RGBA': img = img.convert('RGB')
         prompt = self._get_combined_prompt('Extract all text from this image. Respond in a strict JSON format like this: {"extracted_text": "all the text you found"}.')
-        response = self.model.generate_content([prompt, img]); self.process_and_copy_result(response)
+        response = self.model.generate_content([prompt, img]); self.process_and_copy_result(response, self.model.model_name)
 
     def handle_hooked_ocr_request(self, physical_roi_rect):
-        # YUUKA FIX: Luôn chạy tác vụ trong một thread mới để không block UI.
         threading.Thread(target=self._process_with_error_handling, args=(self.process_hooked_region_in_thread, physical_roi_rect), daemon=True).start()
 
     def handle_file_drop_request(self, filepath):
         if self._is_valid_file(filepath):
-            # YUUKA FIX: Luôn chạy tác vụ trong một thread mới để không block UI.
+            self.logger.log_source("file_drop", detail=filepath) # YUUKA: Log source
             threading.Thread(target=self._process_with_error_handling, args=(self.process_file_in_thread, filepath), daemon=True).start()
         else:
             self.processingComplete.emit()
 
     def handle_user_config_changed(self, new_config):
+        # YUUKA: Log sự thay đổi model
+        old_model = self.user_config.get('gemini_model')
+        new_model = new_config.get('gemini_model')
+        if old_model != new_model:
+            self.logger.console_log(f"Model Gemini được đổi từ '{old_model}' thành '{new_model}'.")
+            
         self.user_config = new_config
         if self.api_key:
             self._update_model()

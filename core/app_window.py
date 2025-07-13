@@ -17,30 +17,30 @@ except ImportError:
 
 from PySide6.QtWidgets import QApplication, QLabel
 from PySide6.QtGui import QPixmap, QPainter, QFont, QCloseEvent, QColor, QWheelEvent, QDragEnterEvent
-from PySide6.QtCore import Qt, QTimer, QPoint, QPointF, Signal, QRect
+from PySide6.QtCore import Qt, QTimer, QPoint, QPointF, Signal, QRect, QElapsedTimer
 
 from core.physics import PhysicsMovableWidget
-from core.sub_windows import ConfigWindow, NotificationWindow, ResultDisplayWindow, SnippingWidget, SelectionOverlayWidget
+from core.ui import (ConfigWindow, NotificationWindow, ResultDisplayWindow, 
+                     SnippingWidget, SelectionOverlayWidget)
 from core.utils import get_true_window_rect, get_process_name_from_hwnd, get_screen_dpi_ratio, get_display_config_hash, set_startup_status
+from core.logging import Logger
 
-# YUUKA: HotkeyListener được cải tiến để xử lý tất cả các tổ hợp phím một cách đáng tin cậy.
 class HotkeyListener(threading.Thread):
-    def __init__(self, hotkey_str, callback):
+    def __init__(self, hotkey_str, callback, logger):
         super().__init__(daemon=True)
         self.callback = callback
+        self.logger = logger
         self.keyboard_listener = None
         self.mouse_listener = None
         self.stop_event = threading.Event()
         self.lock = threading.Lock()
         
-        # State tracking
         self.active_modifiers = set()
         self.required_modifiers = set()
         self.target_mouse_button = None
         self.target_key = None
         
-        # Initial hotkey
-        self.hotkey_str = "" # Sẽ được set bởi update_hotkey
+        self.hotkey_str = "" 
         self.update_hotkey(hotkey_str)
 
 
@@ -63,12 +63,11 @@ class HotkeyListener(threading.Thread):
         with self.lock:
             self._stop_listeners_internal()
             if not self.hotkey_str:
-                print("Yuuka Hotkey: Chuỗi phím tắt rỗng, không thể lắng nghe.")
+                self.logger.console_log("Hotkey: Chuỗi phím tắt rỗng, không thể lắng nghe.")
                 return
 
             self.required_modifiers, main_key = self._parse_hotkey_parts()
             
-            # YUUKA: Luôn cần một keyboard listener để theo dõi modifiers
             mod_key_map = {
                 keyboard.Key.ctrl_l: 'ctrl', keyboard.Key.ctrl_r: 'ctrl',
                 keyboard.Key.shift: 'shift', keyboard.Key.shift_r: 'shift',
@@ -90,12 +89,11 @@ class HotkeyListener(threading.Thread):
                 self._setup_keyboard_listener(on_mod_press, on_mod_release, main_key)
 
     def _setup_mouse_listener(self, on_mod_press, on_mod_release, main_key):
-        # YUUKA FIX: Đơn giản hóa mapping
         button_map = { "middle": mouse.Button.middle, "mouse:middle": mouse.Button.middle, "x1": mouse.Button.x1, "mouse:x1": mouse.Button.x1, "x2": mouse.Button.x2, "mouse:x2": mouse.Button.x2 }
         self.target_mouse_button = button_map.get(main_key)
         
         if not self.target_mouse_button:
-            print(f"Yuuka Hotkey: Nút chuột không hợp lệ: {main_key}")
+            self.logger.console_log(f"Hotkey: Nút chuột không hợp lệ: {main_key}")
             return
 
         def on_click(x, y, button, pressed):
@@ -130,15 +128,13 @@ class HotkeyListener(threading.Thread):
 
             self.keyboard_listener = keyboard.Listener(on_press=on_key_press, on_release=on_key_release, daemon=True)
             self.keyboard_listener.start()
-
         except Exception as e:
-            print(f"Yuuka Hotkey: Không thể gán phím tắt '{self.hotkey_str}'. Lỗi: {e}")
+            self.logger.console_log(f"Hotkey: Không thể gán phím tắt '{self.hotkey_str}'. Lỗi: {e}")
 
     def update_hotkey(self, new_hotkey_str):
+        # YUUKA: Bỏ ghi log ở đây, việc ghi log sẽ do MainWindow xử lý
         with self.lock:
             self.hotkey_str = new_hotkey_str.lower().strip() if new_hotkey_str else ""
-        self._stop_listeners_internal()
-        self._start_listeners()
 
     def _stop_listeners_internal(self):
         if self.keyboard_listener:
@@ -157,8 +153,6 @@ class HotkeyListener(threading.Thread):
             
     def stop(self):
         self.stop_event.set()
-        self._stop_listeners_internal()
-
 
 class MainWindow(PhysicsMovableWidget):
     requestApiKeyVerification = Signal(str)
@@ -168,19 +162,23 @@ class MainWindow(PhysicsMovableWidget):
     requestFileProcessing = Signal(str)
     hotkeyTriggered = Signal()
 
-    def __init__(self, app_configs, user_config_path):
+    def __init__(self, app_configs, user_config_path, logger: Logger):
         self.app_configs = app_configs
         self.user_config_path = user_config_path
+        self.logger = logger
         self.user_dir = os.path.dirname(user_config_path)
         self.user_config = {}
         self.my_pid = os.getpid()
+
+        self.session_timer = QElapsedTimer()
+        self.session_timer.start()
 
         self._load_user_config()
         
         physics_cfg = self._get_current_physics_config()
         super().__init__(physics_config=physics_cfg)
 
-        self.config_window = ConfigWindow(self, physics_cfg)
+        self.config_window = ConfigWindow(self, physics_cfg, self.logger)
         self.result_window = ResultDisplayWindow(self, physics_cfg)
         self.notification_window = NotificationWindow(self, physics_cfg)
         self.snipping_widget = None
@@ -209,7 +207,14 @@ class MainWindow(PhysicsMovableWidget):
         self._apply_scale()
         self._apply_global_theme()
         self._apply_sub_window_min_width()
+        
         self.start_hotkey_listener()
+
+        # YUUKA: THAY ĐỔI LOGIC KHỞI ĐỘNG
+        # 1. Đặt một trạng thái trung lập ban đầu.
+        # 2. Không gọi reset_status() ngay lập tức, vì chưa biết trạng thái key.
+        self.update_status(".....")
+        self.update_status("Waking up...")
 
     def _get_current_physics_config(self):
         return {
@@ -227,11 +232,11 @@ class MainWindow(PhysicsMovableWidget):
         try:
             self.base_ui_pixmap = QPixmap(ui_path_to_load)
             if self.base_ui_pixmap.isNull():
-                print(f"Yuuka: Lỗi! Không thể tải '{ui_path_to_load}'. Thử lại với UI mặc định.")
+                self.logger.console_log(f"Lỗi! Không thể tải '{ui_path_to_load}'. Thử lại với UI mặc định.")
                 self.base_ui_pixmap = QPixmap(default_ui_path)
                 if self.base_ui_pixmap.isNull(): raise FileNotFoundError
         except FileNotFoundError:
-            print(f"Yuuka: Lỗi! Không tìm thấy file giao diện mặc định '{default_ui_path}'.")
+            self.logger.console_log(f"Lỗi! Không tìm thấy file giao diện mặc định '{default_ui_path}'.")
             sys.exit(1)
 
         self.ui_pixmap = self.base_ui_pixmap
@@ -242,27 +247,32 @@ class MainWindow(PhysicsMovableWidget):
         self.move(QPoint(last_pos_config['x'], last_pos_config['y']))
         self.current_pos_f = QPointF(self.pos())
         self.target_pos_f = QPointF(self.pos())
-        self.reset_status()
+        # YUUKA: Bỏ self.reset_status() ở đây.
 
     def connect_internal_signals(self):
         self.config_window.config_changed.connect(self._on_config_changed)
         self.config_window.apiKeySubmitted.connect(self._on_api_key_submitted)
         self.config_window.uiImageChanged.connect(self._on_ui_image_changed)
         self.hotkeyTriggered.connect(self.trigger_hooked_ocr)
+        self.config_window.window_hidden.connect(self.start_hotkey_listener)
+
 
     def start_timers(self):
         self.hook_timer = QTimer(self); self.hook_timer.timeout.connect(self.maintain_hook_position); self.hook_timer.start(50)
 
-    def start_hotkey_listener(self):
-        hotkey_str = self.user_config.get('hook_ocr_hotkey', self.app_configs.get('HOOK_OCR_HOTKEY', 'middle'))
-        
-        if self.hotkey_listener is None:
-            self.hotkey_listener = HotkeyListener(hotkey_str, self.hotkeyTriggered.emit)
-            self.hotkey_listener.start()
-        else:
-            self.hotkey_listener.update_hotkey(hotkey_str)
+    def stop_hotkey_listener(self):
+        if self.hotkey_listener:
+            self.hotkey_listener.stop()
+            self.hotkey_listener.join(timeout=1)
+            if self.hotkey_listener.is_alive():
+                 self.logger.console_log("CẢNH BÁO: Luồng HotkeyListener không dừng kịp thời.")
+            self.hotkey_listener = None
 
-        print(f"Yuuka Hotkey: Đang lắng nghe phím '{hotkey_str}'.")
+    def start_hotkey_listener(self):
+        self.stop_hotkey_listener()
+        hotkey_str = self.user_config.get('hook_ocr_hotkey', self.app_configs.get('HOOK_OCR_HOTKEY', 'middle'))
+        self.hotkey_listener = HotkeyListener(hotkey_str, self.hotkeyTriggered.emit, self.logger)
+        self.hotkey_listener.start()
 
     def _load_user_config(self):
         default_config = {
@@ -293,16 +303,18 @@ class MainWindow(PhysicsMovableWidget):
                         self.user_config.setdefault(key, value)
             else: self.user_config = default_config; self._save_user_config()
         except Exception as e:
-            print(f"Yuuka: Không thể tải cấu hình người dùng. Dùng cấu hình mặc định. Lỗi: {e}"); self.user_config = default_config
+            self.logger.console_log(f"Không thể tải cấu hình người dùng. Dùng cấu hình mặc định. Lỗi: {e}"); self.user_config = default_config
         
-    def _save_user_config(self):
+    def _save_user_config(self, from_config_window=False):
         try:
             if not self.is_hooked:
                 display_hash = get_display_config_hash()
                 self.user_config.setdefault('positions', {})[display_hash] = {'x': self.pos().x(), 'y': self.pos().y()}
             os.makedirs(self.user_dir, exist_ok=True)
             with open(self.user_config_path, 'w', encoding='utf-8') as f: json.dump(self.user_config, f, ensure_ascii=False, indent=4)
-        except Exception as e: print(f"Yuuka: Không thể lưu cấu hình người dùng. Lỗi: {e}")
+            if from_config_window:
+                self.logger.console_log("Cài đặt đã được lưu.")
+        except Exception as e: self.logger.console_log(f"Không thể lưu cấu hình người dùng. Lỗi: {e}")
 
     def _on_config_changed(self, new_config_values):
         changed = False
@@ -322,19 +334,24 @@ class MainWindow(PhysicsMovableWidget):
             if is_different:
                 self.user_config[key] = value
                 changed = True
+                
+                if key == 'custom_prompt' and self.user_config.get('prompt_enabled'):
+                    self.logger.add_recent_prompt(value)
 
                 if key == 'start_with_system':
                     set_startup_status(value)
+                
+                if key == 'hook_ocr_hotkey':
+                    hotkey_changed = True
+                    self.logger.console_log(f"Hotkey OCR được đổi thành: '{value}'")
 
-                # YUUKA FIX: Bỏ thông báo prompt mode
                 if key in ['sub_window_position', 'sub_window_spacing']: layout_changed = True
                 if key in ['theme', 'ui_scale', 'close_button_color']: theme_related_changed = True
                 if key.startswith('PHYSICS_'): physics_changed = True
-                if key == 'hook_ocr_hotkey': hotkey_changed = True
                 if key == 'min_sub_win_width': sub_width_changed = True
                 
         if changed:
-            self._save_user_config()
+            self._save_user_config(from_config_window=True)
             self.userConfigChanged.emit(self.user_config)
 
             if theme_related_changed:
@@ -350,7 +367,9 @@ class MainWindow(PhysicsMovableWidget):
                 self._apply_sub_window_min_width()
 
             if hotkey_changed:
-                self.start_hotkey_listener()
+                new_hotkey = self.user_config.get('hook_ocr_hotkey')
+                if self.hotkey_listener and new_hotkey:
+                     self.hotkey_listener.update_hotkey(new_hotkey)
 
             if layout_changed or sub_width_changed:
                 for sub_win in [self.config_window, self.result_window, self.notification_window]:
@@ -367,11 +386,12 @@ class MainWindow(PhysicsMovableWidget):
             self.base_ui_pixmap = QPixmap(new_user_ui_path)
             if self.base_ui_pixmap.isNull(): raise ValueError("Failed to load new pixmap")
             self._apply_scale()
-            self.update_status("Yuuka: Giao diện đã được cập nhật!", 3000)
+            self.update_status("Giao diện đã được cập nhật!", 3000)
+            self.logger.console_log("Giao diện người dùng đã được thay đổi.")
             if self.config_window.isVisible():
                 self.config_window.update_ui_preview(self.base_ui_pixmap)
         except Exception as e:
-            print(f"Yuuka: Lỗi khi đổi giao diện: {e}"); self.update_status("Yuuka: Lỗi đổi giao diện!", 3000)
+            self.logger.console_log(f"Lỗi khi đổi giao diện: {e}"); self.update_status("Lỗi đổi giao diện!", 3000)
 
     def _apply_scale(self):
         scale_percent = self.user_config.get('ui_scale', 100); scale_factor = scale_percent / 100.0
@@ -409,7 +429,8 @@ class MainWindow(PhysicsMovableWidget):
                  self.config_window.ui_scale_slider.setValue(new_scale)
 
     def closeEvent(self, event: QCloseEvent):
-        if self.hotkey_listener: self.hotkey_listener.stop()
+        self.logger.console_log("Ứng dụng đang tắt...")
+        self.stop_hotkey_listener()
         for window in [self.config_window, self.result_window, self.notification_window, self.snipping_widget, self.selection_overlay]:
             if window: window.close()
         self._save_user_config(); super().closeEvent(event)
@@ -481,31 +502,30 @@ class MainWindow(PhysicsMovableWidget):
                 dpi = get_screen_dpi_ratio(self.pos())
                 hooked_win_qpoint_physical = QPoint(self.hooked_win_rect_physical[0], self.hooked_win_rect_physical[1])
                 self.hook_offset_logical = self.pos() - (hooked_win_qpoint_physical / dpi)
-            self._save_user_config()
+            self._save_user_config(from_config_window=False)
         event.accept()
 
     def update_status(self, text, duration=0):
         if self.config_window.isVisible(): self.config_window.hide()
-        
-        # YUUKA FIX: Xóa bỏ logic tự động đặt is_processing_request.
-        # Trạng thái này giờ sẽ được quản lý một cách tường minh.
-        
         self.notification_window.setText(text)
         self._position_sub_window(self.notification_window, self.pos())
         self.notification_window.show()
         if duration > 0: QTimer.singleShot(duration, self.notification_window.hide)
 
     def reset_status(self): QTimer.singleShot(50, self._perform_reset_status)
+    
     def _perform_reset_status(self):
         if self.is_processing_request or self.notification_window.isVisible(): return
         hotkey = self.user_config.get('hook_ocr_hotkey', 'phím tắt').upper()
+        
         if self.is_api_key_needed:
-            self.update_status("Waking up...") 
             self.update_status("Copy Gemini API key đi~")
-        elif self.is_hooked: self.update_status(f"Nhấn '{hotkey}' để OCR.")
-        elif self.user_config.get('process_text_clipboard', False): self.update_status("Yuuka: Copy text đi~")
-        elif self.user_config.get('prompt_enabled', False): self.update_status("Yuuka: Prompt mode on!")
-        else: self.update_status("Yuuka: Cap ảnh/file đi~")
+        elif self.is_hooked:
+            self.update_status(f"Nhấn '{hotkey}' để OCR.")
+        elif self.user_config.get('process_text_clipboard', False):
+            self.update_status("Copy text đi~")
+        else:
+            self.update_status("Cap ảnh/file đi~")
 
     def check_for_hookable_window(self):
         my_rect = self.geometry()
@@ -544,15 +564,14 @@ class MainWindow(PhysicsMovableWidget):
 
     def hook_to_window(self, hwnd, rect_physical, _, edge):
         if self.is_hooked and self.hooked_hwnd == hwnd and self.hook_edge == edge: return
-        try: print(f"Yuuka: Hooking to {edge} of window {hwnd} (PID: {win32process.GetWindowThreadProcessId(hwnd)[1]}, Process: {get_process_name_from_hwnd(hwnd) or 'N/A'})")
-        except: print(f"Yuuka: Hooking to {edge} of window {hwnd}")
+        try: self.logger.console_log(f"Hooking to {edge} of window {hwnd} (PID: {win32process.GetWindowThreadProcessId(hwnd)[1]}, Process: {get_process_name_from_hwnd(hwnd) or 'N/A'})")
+        except: self.logger.console_log(f"Hooking to {edge} of window {hwnd}")
         
         self.is_hooked = True; self.hook_edge = edge; self.hooked_hwnd = hwnd
         self.hooked_win_rect_physical = rect_physical; self._reset_roi_state()
         if self.config_window.isVisible(): self.config_window.hide()
         
-        if self.notification_window.isVisible():
-            self.notification_window.hide()
+        if self.notification_window.isVisible(): self.notification_window.hide()
 
         dpi = get_screen_dpi_ratio(QPoint(rect_physical[0], rect_physical[1]))
         target_x = self.pos().x()
@@ -572,10 +591,10 @@ class MainWindow(PhysicsMovableWidget):
 
     def unhook(self):
         if self.is_hooked:
-            print("Yuuka: Unhooked."); self.velocity_f += QPointF(0, -2)
+            self.logger.console_log("Unhooked."); self.velocity_f += QPointF(0, -2)
             self.is_hooked = False; self.hooked_hwnd = None; self.hook_edge = None
             self.hooked_win_rect_physical = None; self.hook_offset_logical = QPoint(0,0)
-            self._reset_roi_state(); self.update_status("Yuuka: Cap ảnh/file đi~", 3000)
+            self._reset_roi_state(); self.update_status("Cap ảnh/file đi~", 3000)
             if self.config_window.isVisible(): self.config_window.hide()
 
     def maintain_hook_position(self):
@@ -608,7 +627,7 @@ class MainWindow(PhysicsMovableWidget):
     def trigger_hooked_ocr(self):
         if not self.is_hooked or self.is_processing_request or self.is_api_key_needed: return
         if self.hooked_roi_physical:
-            self.is_processing_request = True; self.update_status("Yuuka: Đọc lại...")
+            self.is_processing_request = True; self.update_status("Đọc lại...")
             self.requestHookedOCR.emit(QRect(self.hooked_roi_physical))
         else:
             self.hook_timer.stop()
@@ -633,7 +652,7 @@ class MainWindow(PhysicsMovableWidget):
         if not self.is_hooked or not self.hooked_win_rect_physical: self.reset_status(); return
         if global_rect.width() < 5 or global_rect.height() < 5: self.reset_status(); return
         
-        self.is_processing_request = True; self.update_status("Yuuka: Gemini đọc...")
+        self.is_processing_request = True; self.update_status("Gemini đọc...")
         self.hooked_roi_logical = global_rect
         dpi = get_screen_dpi_ratio(global_rect.center())
         win_top_left = QPoint(int(self.hooked_win_rect_physical[0] / dpi), int(self.hooked_win_rect_physical[1] / dpi))
@@ -652,13 +671,31 @@ class MainWindow(PhysicsMovableWidget):
         if self.selection_overlay: self.selection_overlay.hide()
 
     def toggle_config_window(self):
-        if self.config_window.isVisible(): self.config_window.hide()
+        if self.config_window.isVisible():
+            self.config_window.hide()
         else:
-            if self.is_hooked: self.unhook()
+            if self.is_hooked:
+                self.unhook()
+            
+            self.stop_hotkey_listener()
+            
+            time.sleep(0.1)
+
             api_info = {'key': self.last_known_api_key, 'verified': not self.is_api_key_needed, 'models': self.available_models}
-            self.config_window.load_config(self.user_config, self.app_configs, api_info, self.base_ui_pixmap)
+            
+            self.config_window.load_config(
+                self.user_config, 
+                self.app_configs, 
+                api_info, 
+                self.base_ui_pixmap, 
+                self.logger.get_logs(),
+                self.session_timer 
+            )
+            
             self._position_sub_window(self.config_window, self.pos())
-            self.config_window.show(); self.config_window.activateWindow(); self.config_window.setFocus()
+            self.config_window.show()
+            self.config_window.activateWindow()
+            self.config_window.setFocus()
 
     def _position_sub_window(self, sub_window, main_window_pos):
         main_rect = QRect(main_window_pos, self.size())
@@ -693,22 +730,28 @@ class MainWindow(PhysicsMovableWidget):
         if not sub_window.isVisible(): sub_window.move(target_pos)
         else: sub_window.set_animated_target(target_pos)
 
+    # YUUKA: CÁC HÀM XỬ LÝ TÍN HIỆU TỪ PLUGIN (ĐÃ ĐƯỢC CẬP NHẬT)
     def handle_api_key_needed(self):
         self.is_api_key_needed = True; self.last_known_api_key = ""; self.available_models = []
-        self.config_window.update_api_key_status(self.last_known_api_key, False, []); self.reset_status()
+        self.config_window.update_api_key_status(self.last_known_api_key, False, [])
+        self.reset_status() # Gọi reset_status sau khi đã biết chắc chắn là cần key.
         
     def handle_api_key_failed(self, attempted_key):
         self.is_api_key_needed = True; self.last_known_api_key = attempted_key; self.available_models = []
         self.config_window.update_api_key_status(self.last_known_api_key, False, [])
-        if not self.config_window.isVisible(): self.reset_status()
+        self.reset_status() # Gọi reset_status sau khi đã biết chắc chắn là key lỗi.
         
     def handle_api_key_verified(self, key, models):
         self.is_api_key_needed = False; self.last_known_api_key = key; self.available_models = models
         self.config_window.update_api_key_status(key, True, models)
         if not self.config_window.isVisible():
-            self.update_status("Yuuka: Key OK!", 3000)
+            self.update_status("Key OK!", 2000)
+            # Sau khi hiển thị "Key OK!", đợi một chút rồi mới reset về trạng thái chờ mặc định.
+            QTimer.singleShot(2100, self.reset_status)
+        else:
+            # Nếu cửa sổ config đang mở thì không cần làm gì thêm.
+            pass
 
-    # YUUKA FIX: Thêm slot để xử lý khi một quá trình xử lý thực sự bắt đầu.
     def handle_processing_started(self):
         self.is_processing_request = True
 
