@@ -144,7 +144,7 @@ class ConfigWindow(PhysicsMovableWidget):
             QCheckBox::indicator:checked {{ background-color: {accent_color}; }}
             QTextEdit, QLineEdit, QFontComboBox, QSpinBox, QComboBox, QScrollArea {{ background-color: transparent; border: 1px solid {accent_color}88; border-radius: 5px; color: {text_color}; padding: 5px; font-family: "{font_family}"; font-size: {font_size}pt; }}
             QTextEdit, QLineEdit, QFontComboBox, QSpinBox, QComboBox {{ background-color: rgba(0,0,0,0.2); }}
-            QScrollArea {{ border: none; }}
+            QScrollArea {{ background-color: transparent; border: none; }}
             QTextEdit:focus, QLineEdit:focus, QFontComboBox:focus, QSpinBox:focus, QComboBox:focus {{ border-color: {accent_color}; }}
             QPushButton {{ background-color: rgba(255,255,255,0.1); color: {text_color}; border: 1px solid {accent_color}88; border-radius: 5px; padding: 5px 8px; font-family: "{font_family}"; }}
             QPushButton:hover {{ background-color: rgba(255,255,255,0.2); }} 
@@ -179,18 +179,41 @@ class ConfigWindow(PhysicsMovableWidget):
 
     def _run_update_check_in_thread(self): status, message, details = update.check_for_updates(); self.updateCheckCompleted.emit(status, message, details)
     def _on_update_check_completed(self, status, message, details):
-        self.update_status_label.setText(message); self.update_button.hide(); self.update_details_label.hide(); self.update_details_label.setText("")
+        self.update_status_label.setText(message)
+        self.update_button.hide()
+        
+        # YUUKA: Chỉ cần ẩn/hiện QTextEdit là đủ
+        self.update_details_label.hide()
+        self.update_details_label.clear() # Dùng clear() cho QTextEdit
+
         if details:
-            commit_msg = details.get('message', 'N/A').replace('<', '<').replace('>', '>')
+            commit_msg = details.get('message', 'N/A')
             commit_date = details.get('date', 'N/A')
-            title = "<b>Nội dung cập nhật:</b>";
-            if status == update.UPDATE_STATUS['UP_TO_DATE']: title = "<b>Thông tin phiên bản hiện tại:</b>"
-            details_text = f"""<p>{title}<br/>{commit_msg.replace(os.linesep, '<br/>')}</p><p><b>Thời gian:</b> {commit_date}</p>"""; self.update_details_label.setText(details_text); self.update_details_label.show()
-        if status == update.UPDATE_STATUS['AHEAD']: self.update_button.show(); self.update_button.setEnabled(True)
+            title = "<b>Nội dung cập nhật:</b>"
+            if status == update.UPDATE_STATUS['UP_TO_DATE']: 
+                title = "<b>Thông tin phiên bản hiện tại:</b>"
+            
+            # YUUKA FIX: Vẫn giữ logic replace \n bằng <br/>
+            commit_msg = commit_msg.replace(os.linesep, '<br/>').replace('\n', '<br/>')
+            details_text = f"""<p>{title}<br/>{commit_msg}</p><p><b>Thời gian:</b> {commit_date}</p>"""
+            
+            # YUUKA FIX: Dùng setHtml() thay vì setText() cho QTextEdit
+            self.update_details_label.setHtml(details_text)
+            self.update_details_label.show()
+
+        if status == update.UPDATE_STATUS['AHEAD']: 
+            self.update_button.show()
+            self.update_button.setEnabled(True)
 
     def _on_update_button_clicked(self):
-        self.update_status_label.setText("Đang cập nhật... Vui lòng không tắt Yuuka nhé!"); self.update_button.setEnabled(False); self.update_details_label.hide(); QApplication.processEvents()
-        def update_and_restart_thread(): update.perform_update(); self.requestRestart.emit()
+        self.update_status_label.setText("Đang cập nhật... Vui lòng không tắt Yuuka nhé!")
+        self.update_button.setEnabled(False)
+        # YUUKA: Ẩn QTextEdit khi đang cập nhật
+        self.update_details_label.hide()
+        QApplication.processEvents()
+        def update_and_restart_thread(): 
+            update.perform_update()
+            self.requestRestart.emit()
         threading.Thread(target=update_and_restart_thread, daemon=True).start()
 
     def _emit_changes(self, _=None):
@@ -252,7 +275,11 @@ class ConfigWindow(PhysicsMovableWidget):
         if config_data.get('gemini_model'): self.gemini_model_combo.setCurrentText(config_data.get('gemini_model'))
         self.apply_stylesheet(theme_config, config_data, app_configs); self._update_log_display(log_data); self.update_ui_preview(base_pixmap)
         for widget in self.findChildren(QWidget): widget.blockSignals(False)
-        self.adjustSize(); self.update_status_label.setText("Đang kiểm tra update..."); self.update_button.hide(); self.update_details_label.hide()
+        self.adjustSize()
+        self.update_status_label.setText("Đang kiểm tra update...")
+        self.update_button.hide()
+        # YUUKA: Chỉ cần ẩn QTextEdit
+        self.update_details_label.hide()
         threading.Thread(target=self._run_update_check_in_thread, daemon=True).start()
 
     def _update_log_display(self, log_data):

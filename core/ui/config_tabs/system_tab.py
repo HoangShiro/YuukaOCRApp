@@ -1,7 +1,7 @@
 # core/ui/config_tabs/system_tab.py
 from PySide6.QtWidgets import (QVBoxLayout, QWidget, QCheckBox, QLabel, QFrame,
                                QLineEdit, QPushButton, QHBoxLayout, QStackedWidget,
-                               QComboBox, QGroupBox, QTextEdit)
+                               QComboBox, QGroupBox, QTextEdit, QScrollArea)
 
 def create_system_tab(self: QWidget) -> QWidget:
     """
@@ -29,13 +29,19 @@ def create_system_tab(self: QWidget) -> QWidget:
     update_layout = QVBoxLayout()
     self.update_status_label = QLabel("Đang kiểm tra...")
     self.update_status_label.setWordWrap(True)
-    self.update_details_label = QLabel("")
-    self.update_details_label.setWordWrap(True)
-    self.update_details_label.setObjectName("updateDetailsLabel")
+    
+    # YUUKA FIX: Thay QLabel bằng QTextEdit để xử lý word-wrap và scroll tốt hơn
+    self.update_details_label = QTextEdit()
+    self.update_details_label.setReadOnly(True) # Không cho người dùng sửa
+    self.update_details_label.setObjectName("updateDetailsLabel") # Giữ lại tên để CSS nhận diện
+    self.update_details_label.setMaximumHeight(200) # Vẫn giới hạn chiều cao
     self.update_details_label.hide()
+
     self.update_button = QPushButton("Cập nhật & Khởi động lại")
     self.update_button.hide()
+    
     update_layout.addWidget(self.update_status_label)
+    # YUUKA: Thêm QTextEdit trực tiếp vào layout, không cần QScrollArea nữa
     update_layout.addWidget(self.update_details_label)
     update_layout.addSpacing(5)
     update_layout.addWidget(self.update_button)
