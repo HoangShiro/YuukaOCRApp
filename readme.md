@@ -6,7 +6,7 @@
 
 **YuukaOCR** là một ứng dụng trợ lý desktop nhỏ gọn, trong suốt và không có viền, luôn nổi trên màn hình để giúp Sensei thực hiện các tác vụ OCR (nhận dạng ký tự quang học) và xử lý văn bản/file một cách nhanh chóng với sức mạnh của API Google Gemini.
 
-https://github.com/user-attachments/assets/e1744b82-f5cb-4752-9214-41d9a263152d
+https://github.com/user-attachments/assets/11510fe9-a5ef-4176-a633-6443beccad0f
 
 ---
 
@@ -65,7 +65,7 @@ https://github.com/user-attachments/assets/e1744b82-f5cb-4752-9214-41d9a263152d
     *   **Cách khác**: Sensei có thể chạy ứng dụng lần đầu, Yuuka sẽ yêu cầu API key. Sensei chỉ cần copy key và Yuuka sẽ tự động xử lý.
 
 4.  **Khởi động**:
-    Click đúp chuột vào file **`RUN.bat`** để khởi động Yuuka!
+    Click đúp chuột vào file **`YuukaOCR.bat`** để khởi động Yuuka!
 
 ## 📖 Hướng dẫn sử dụng
 
