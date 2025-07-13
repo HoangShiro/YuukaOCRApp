@@ -210,8 +210,8 @@ class MainWindow(PhysicsMovableWidget):
         
         self.start_hotkey_listener()
 
-        self.update_status(".....")
-        self.update_status("Waking up...")
+        # YUUKA: Chỉ hiển thị thông báo "Waking up..." trong 2 giây để tránh treo
+        self.update_status("Waking up...", 2000)
 
     def _get_current_physics_config(self):
         return {
@@ -731,12 +731,16 @@ class MainWindow(PhysicsMovableWidget):
     def handle_api_key_needed(self):
         self.is_api_key_needed = True; self.last_known_api_key = ""; self.available_models = []
         self.config_window.update_api_key_status(self.last_known_api_key, False, [])
-        self.reset_status() # Gọi reset_status sau khi đã biết chắc chắn là cần key.
+        # YUUKA FIX: Trực tiếp cập nhật trạng thái thay vì gọi reset_status() bị chặn.
+        # Thông báo này là trạng thái mặc định mới, nên không cần timeout.
+        self.update_status("Copy Gemini API key đi~")
         
     def handle_api_key_failed(self, attempted_key):
         self.is_api_key_needed = True; self.last_known_api_key = attempted_key; self.available_models = []
         self.config_window.update_api_key_status(self.last_known_api_key, False, [])
-        self.reset_status() # Gọi reset_status sau khi đã biết chắc chắn là key lỗi.
+        # YUUKA FIX: Hiển thị lỗi ngay lập tức, sau đó một lúc mới reset về trạng thái "Copy key"
+        self.update_status("Key không hợp lệ!", 3000)
+        QTimer.singleShot(3100, self.reset_status)
         
     def handle_api_key_verified(self, key, models):
         self.is_api_key_needed = False; self.last_known_api_key = key; self.available_models = models

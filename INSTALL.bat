@@ -43,7 +43,7 @@ if !errorlevel! neq 0 (
 echo.
 echo ===================================================================
 echo   Cai dat thanh cong!
-echo   Bay gio senpai hay chay file RUN.bat de khoi dong Yuuka nhe!
+echo   Bay gio senpai hay chay file YuukaOCR.bat de khoi dong Yuuka nhe!
 echo ===================================================================
 echo.
 pause
