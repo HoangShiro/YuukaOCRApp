@@ -62,22 +62,12 @@ class _ScreenEyedropper(QWidget):
             painter.setPen(Qt.white); painter.drawText(text_rect, Qt.AlignCenter, hex_text)
 
     def mouseMoveEvent(self, event: QMouseEvent):
-        # YUUKA'S FINAL FIX: Tách biệt toạ độ để VẼ và để LẤY MÀU
-        
-        # 1. Lấy toạ độ LOCAL để VẼ kính lúp.
-        #    event.position() là vị trí của chuột BÊN TRONG widget.
-        #    Vì widget của chúng ta phủ toàn bộ desktop ảo, đây chính là toạ độ cần để vẽ.
         self.magnifier_pos_logical = event.position().toPoint()
-
-        # 2. Lấy toạ độ GLOBAL để LẤY MÀU.
-        #    event.globalPosition() là vị trí tuyệt đối trên desktop ảo.
         global_logical_pos = event.globalPosition().toPoint()
         
         screen = QApplication.screenAt(global_logical_pos)
-        if not screen:
-            return
+        if not screen: return
 
-        # 3. Tính toán toạ độ vật lý từ toạ độ GLOBAL (logic này đã đúng)
         if hasattr(screen, 'physicalGeometry'):
             screen_logical_geo = screen.geometry()
             screen_physical_geo = screen.physicalGeometry()
@@ -88,24 +78,23 @@ class _ScreenEyedropper(QWidget):
             ratio = screen.devicePixelRatio()
             self.magnifier_pos_physical = (QPointF(global_logical_pos) * ratio).toPoint()
 
-        # 4. Lấy màu từ pixel vật lý
         if self.desktop_pixmap.rect().contains(self.magnifier_pos_physical):
             self.current_color = self.desktop_pixmap.toImage().pixelColor(self.magnifier_pos_physical)
         
         self.update()
-
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
             self.color_picked.emit(self.current_color)
         else:
             self.cancelled.emit()
+        self.close()
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Escape:
             self.cancelled.emit()
+            self.close()
 
-# --- Các widget con còn lại (không thay đổi) ---
 class _SaturationValuePicker(QWidget):
     sv_changed = Signal(float, float)
     def __init__(self, parent=None):
@@ -213,16 +202,34 @@ class ThemedColorDialog(QDialog):
         if not color_str.startswith("#"): color_str = "#" + color_str
         color = QColor(color_str)
         if color.isValid(): self._update_controls_from_color(color, source='hex')
+
     def _update_controls_from_color(self, color, source=None):
-        self.current_color = QColor(color); self._update_preview_box(self.preview_new, self.current_color); h, s, v, a = color.getHsvF()
-        if source not in ['sv', 'hue']: self.sv_picker.set_hue(h)
-        if source != 'sv': self.sv_picker.set_sv(s, v)
-        if source != 'hue': self.hue_slider.set_value(h)
-        if source != 'alpha': self.alpha_slider.set_value(a)
-        self.alpha_slider.set_color(color)
+        self.current_color = QColor(color)
+        self._update_preview_box(self.preview_new, self.current_color)
+        h, s, v, a = color.getHsvF()
+
+        # YUUKA'S FIX: Tách logic cập nhật SV picker để sửa lỗi
+        if source != 'sv':
+            # Cập nhật cả màu nền (hue) và vị trí marker (s,v)
+            # khi nguồn thay đổi không phải là chính SV picker.
+            self.sv_picker.set_hue(h)
+            self.sv_picker.set_sv(s, v)
+        
+        # Cập nhật các control còn lại, tránh vòng lặp feedback
+        if source != 'hue':
+            self.hue_slider.set_value(h)
+        
+        if self.show_alpha:
+            if source != 'alpha':
+                self.alpha_slider.set_value(a)
+            self.alpha_slider.set_color(color)
+        
         if source != 'hex':
-            format = QColor.HexArgb if self.show_alpha and color.alpha() < 255 else QColor.HexRgb
-            self.hex_edit.blockSignals(True); self.hex_edit.setText(color.name(format).upper()); self.hex_edit.blockSignals(False)
+            format = QColor.NameFormat.HexArgb if self.show_alpha and color.alpha() < 255 else QColor.NameFormat.HexRgb
+            self.hex_edit.blockSignals(True)
+            self.hex_edit.setText(color.name(format).upper())
+            self.hex_edit.blockSignals(False)
+
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton: self.drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft(); event.accept()
     def mouseMoveEvent(self, event: QMouseEvent):
