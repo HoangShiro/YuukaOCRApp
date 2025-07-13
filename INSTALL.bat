@@ -1,61 +1,50 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: --- Step 1: Check for Python command ---
-echo Yuuka: Checking for Python installation...
+:: Chuyen den thu muc goc cua script
+cd /d "%~dp0"
+
+echo Yuuka: Kiem tra Python...
 python --version >nul 2>nul
-if %errorlevel% equ 0 goto :InstallWithPython
+if %errorlevel% equ 0 (
+    set PYTHON_CMD=python
+    goto :InstallLibs
+)
 
 py --version >nul 2>nul
-if %errorlevel% equ 0 goto :InstallWithPy
+if %errorlevel% equ 0 (
+    set PYTHON_CMD=py
+    goto :InstallLibs
+)
 
-:: If we reach here, both failed
-echo   [ERROR] Neither 'python' nor 'py' command found. Please install Python 3.
+echo [LOI] Khong tim thay 'python' hoac 'py'.
+echo Senpai hay cai dat Python 3 (va nho tick vao "Add Python to PATH" nhe).
 pause
 exit /b
 
-
-:InstallWithPython
-echo   Python command found: python
+:InstallLibs
+echo   Da tim thay: %PYTHON_CMD%
 echo.
-echo Yuuka: Installing required libraries from requirements.txt...
+echo Yuuka: Dang cai dat cac thu vien can thiet tu requirements.txt...
 if not exist "requirements.txt" (
-    echo [ERROR] requirements.txt not found!
+    echo [LOI] Khong tim thay file requirements.txt!
     pause
     exit /b
 )
-python -m pip install -r requirements.txt
-if !errorlevel! neq 0 (
-    echo [ERROR] Failed to install libraries. Please check internet or run as Administrator.
-    pause
-    exit /b
-)
-echo   All libraries are installed successfully!
-echo.
-echo Yuuka: All set! Launching the application for the first time...
-echo   (You can use RUN.bat for subsequent launches)
-start "Yuuka OCR" /B pythonw.exe main.py
-goto :EOF
 
-
-:InstallWithPy
-echo   Python command found: py
-echo.
-echo Yuuka: Installing required libraries from requirements.txt...
-if not exist "requirements.txt" (
-    echo [ERROR] requirements.txt not found!
-    pause
-    exit /b
-)
-py -m pip install -r requirements.txt
+%PYTHON_CMD% -m pip install -r requirements.txt
 if !errorlevel! neq 0 (
-    echo [ERROR] Failed to install libraries. Please check internet or run as Administrator.
+    echo [LOI] Cai dat thu vien that bai.
+    echo Senpai hay kiem tra ket noi mang hoac thu chay file nay voi quyen Administrator nhe.
     pause
     exit /b
 )
-echo   All libraries are installed successfully!
+
 echo.
-echo Yuuka: All set! Launching the application for the first time...
-echo   (You can use RUN.bat for subsequent launches)
-start "Yuuka OCR" /B pyw.exe main.py
-goto :EOF
+echo ===================================================================
+echo   Cai dat thanh cong!
+echo   Bay gio senpai hay chay file YuukaOCR.bat de khoi dong Yuuka nhe!
+echo ===================================================================
+echo.
+pause
+exit /b

@@ -1,30 +1,27 @@
 @echo off
 setlocal
 
-:: --- Launching Application ---
-echo Yuuka: Launching application...
-echo   (Update checks are now handled within the app)
+:: Chuyen den thu muc goc cua script de dam bao cac duong dan tuong doi (vd: config/, user/) luon dung
+cd /d "%~dp0"
+
+echo Yuuka: Dang khoi dong...
+echo (Cac log chi tiet se hien thi trong tab Console cua ung dung)
 echo.
 
-:: --- Find Python command and Launch ---
-python --version >nul 2>nul
-if %errorlevel% equ 0 goto :LaunchWithPython
+:: Tim trinh thong dich Python va khoi dong app
+:: YUUKA: Su dung python.exe/py.exe thay vi pythonw.exe/pyw.exe de hien thi loi startup (neu co).
+:: Cua so console nay se duoc dung de hien thi log, sau do log se duoc chuyen vao UI.
+python main.py
+if %errorlevel% equ 0 goto :EOF
 
-py --version >nul 2>nul
-if %errorlevel% equ 0 goto :LaunchWithPy
+py main.py
+if %errorlevel% equ 0 goto :EOF
 
-:: If we reach here, both failed
-echo [ERROR] Neither 'python' nor 'py' command found.
-echo Please run INSTALL.bat first.
+:: Neu ca hai lenh tren deu that bai
+echo [LOI] Khong tim thay 'python' hoac 'py'.
+echo Senpai da cai dat Python va them vao PATH chua?
+echo Vui long chay file INSTALL.bat truoc.
 pause
 exit /b
 
-
-:LaunchWithPython
-start "Yuuka OCR" /B pythonw.exe main.py
-goto :EOF
-
-
-:LaunchWithPy
-start "Yuuka OCR" /B pyw.exe main.py
-goto :EOF
+:EOF
