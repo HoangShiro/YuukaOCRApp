@@ -102,7 +102,7 @@ class GeminiOCRPlugin(QObject):
             self.api_key = None; self.model = None; self.apiKeyFailed.emit(key)
 
     def _update_model(self):
-        model_name = self._get_user_config_value('gemini_model', 'gemini-1.5-flash')
+        model_name = self._get_user_config_value('gemini_model', 'gemini-2.0-flash')
         try:
             if self.model is None or self.model.model_name != f"models/{model_name}":
                 self.logger.console_log(f"Đang sử dụng model '{model_name}'")
