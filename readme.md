@@ -66,17 +66,11 @@ Sensei có thể yên tâm, Yuuka được thiết kế với sự tôn trọng 
     Mở thư mục `YuukaOCR` vừa clone về và **click đúp chuột vào file `INSTALL.bat`**.
     Script này sẽ tự động tạo môi trường ảo và cài đặt tất cả các thư viện Python cần thiết (`PySide6`, `google-generativeai`, `pynput`, v.v.).
 
-3.  **Thêm API Key**:
-    *   Sau khi chạy `INSTALL.bat`, một thư mục `user/` sẽ được tạo.
-    *   Trong thư mục `user/`, tạo một file mới tên là `.env`.
-    *   Mở file `.env` và thêm vào nội dung sau, thay `YOUR_API_KEY_HERE` bằng key của Sensei:
-        ```
-        GOOGLE_API_KEY=YOUR_API_KEY_HERE
-        ```
-    *   **Cách khác**: Sensei có thể chạy ứng dụng lần đầu, Yuuka sẽ yêu cầu API key. Sensei chỉ cần copy key và Yuuka sẽ tự động xử lý.
-
-4.  **Khởi động**:
+3.  **Khởi động**:
     Click đúp chuột vào file **`YuukaOCR.bat`** để khởi động Yuuka!
+
+4.  **Thêm API Key**:
+    Sau chạy ứng dụng lần đầu, Yuuka sẽ yêu cầu API key. Sensei chỉ cần copy key và Yuuka sẽ tự động xử lý. Hoặc Sensei có thể chuột phải vào Yuuka để thêm API key.
 
 ## 📖 Hướng dẫn sử dụng
 
