@@ -58,7 +58,7 @@ Sensei có thể yên tâm, Yuuka được thiết kế với sự tôn trọng 
 ### Các bước cài đặt
 1.  **Clone Repository**:
     ```bash
-    git clone https://github.com/TEN_REPO_CUA_SENSEI/YuukaOCR.git
+    git clone https://github.com/HoangShiro/YuukaOCRApp
     cd YuukaOCR
     ```
 
