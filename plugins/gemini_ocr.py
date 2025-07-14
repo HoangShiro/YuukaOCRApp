@@ -125,14 +125,16 @@ class GeminiOCRPlugin(QObject):
             except Exception: pass
             return
         
-        try:
-            img = ImageGrab.grabclipboard()
-            if isinstance(img, (Image.Image, PngImagePlugin.PngImageFile)) and self._is_new_content(img.tobytes()):
-                self.last_clipboard_content = img.tobytes()
-                self.logger.log_source("image_clipboard") # YUUKA: Log source
-                threading.Thread(target=self._process_with_error_handling, args=(self.process_image_in_thread, img), daemon=True).start()
-                return
-        except Exception: pass
+        # <<< YUUKA: THÊM MỚI >>>
+        if self._get_user_config_value('process_snipping_clipboard', True):
+            try:
+                img = ImageGrab.grabclipboard()
+                if isinstance(img, (Image.Image, PngImagePlugin.PngImageFile)) and self._is_new_content(img.tobytes()):
+                    self.last_clipboard_content = img.tobytes()
+                    self.logger.log_source("image_clipboard") # YUUKA: Log source
+                    threading.Thread(target=self._process_with_error_handling, args=(self.process_image_in_thread, img), daemon=True).start()
+                    return
+            except Exception: pass
 
         if self._get_user_config_value('process_file_clipboard', True):
             try: 

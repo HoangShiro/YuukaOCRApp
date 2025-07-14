@@ -98,6 +98,7 @@ class ConfigWindow(PhysicsMovableWidget):
     def _connect_signals(self):
         self.auto_update_cb.stateChanged.connect(self._emit_changes); self.start_with_system_cb.stateChanged.connect(self._emit_changes)
         self.text_clipboard_cb.stateChanged.connect(self._emit_changes); self.file_clipboard_cb.stateChanged.connect(self._emit_changes)
+        self.snipping_clipboard_cb.stateChanged.connect(self._emit_changes) # <<< YUUKA: THÊM MỚI
         self.prompt_enabled_cb.stateChanged.connect(self._emit_changes); self.custom_prompt_edit.textChanged.connect(self._emit_changes)
         self.gemini_model_combo.currentIndexChanged.connect(self._emit_changes); self.font_family_combo.currentFontChanged.connect(self._emit_changes)
         self.font_size_spinbox.valueChanged.connect(self._emit_changes); self.update_button.clicked.connect(self._on_update_button_clicked)
@@ -220,7 +221,15 @@ class ConfigWindow(PhysicsMovableWidget):
         theme_data = {'accent_color': self.theme_accent_preview.text(), 'sub_win_bg': self.theme_bg_preview.text(), 'sub_win_text': self.theme_text_preview.text(), 'sub_win_font_family': self.font_family_combo.currentFont().family(), 'sub_win_font_size': self.font_size_spinbox.value()}
         hotkey_text = self.ocr_hotkey_button.text()
         if hotkey_text.startswith("Đang ghi...") or "không được hỗ trợ" in hotkey_text: hotkey_text = self.ocr_hotkey_button._original_text
-        config_data = {'auto_update_enabled': self.auto_update_cb.isChecked(), 'start_with_system': self.start_with_system_cb.isChecked(), 'process_text_clipboard': self.text_clipboard_cb.isChecked(), 'process_file_clipboard': self.file_clipboard_cb.isChecked(), 'prompt_enabled': self.prompt_enabled_cb.isChecked(), 'custom_prompt': self.custom_prompt_edit.toPlainText().strip(), 'theme': theme_data, 'sub_window_position': self.current_pos_mode, 'sub_window_spacing': self.spacing_slider.value(), 'min_sub_win_width': self.min_sub_win_width_slider.value(), 'ui_scale': self.ui_scale_slider.value(), 'hook_ocr_hotkey': hotkey_text, 'gemini_model': self.gemini_model_combo.currentText()}
+        config_data = {
+            'auto_update_enabled': self.auto_update_cb.isChecked(), 'start_with_system': self.start_with_system_cb.isChecked(), 
+            'process_text_clipboard': self.text_clipboard_cb.isChecked(), 'process_file_clipboard': self.file_clipboard_cb.isChecked(), 
+            'process_snipping_clipboard': self.snipping_clipboard_cb.isChecked(), # <<< YUUKA: THÊM MỚI
+            'prompt_enabled': self.prompt_enabled_cb.isChecked(), 'custom_prompt': self.custom_prompt_edit.toPlainText().strip(), 
+            'theme': theme_data, 'sub_window_position': self.current_pos_mode, 'sub_window_spacing': self.spacing_slider.value(), 
+            'min_sub_win_width': self.min_sub_win_width_slider.value(), 'ui_scale': self.ui_scale_slider.value(), 
+            'hook_ocr_hotkey': hotkey_text, 'gemini_model': self.gemini_model_combo.currentText()
+        }
         close_color = QColor(self.theme_close_button_preview.text());
         if close_color.isValid(): config_data['close_button_color'] = list(close_color.getRgb()[:3])
         for param, (slider, _) in self.hook_sliders.items(): config_data[param] = slider.value()
@@ -261,7 +270,14 @@ class ConfigWindow(PhysicsMovableWidget):
 
     def load_config(self, config_data, app_configs, api_key_info, base_pixmap, log_data, session_timer: QElapsedTimer):
         for widget in self.findChildren(QWidget): widget.blockSignals(True)
-        self.session_timer = session_timer; self.auto_update_cb.setChecked(config_data.get('auto_update_enabled', True)); self.start_with_system_cb.setChecked(config_data.get('start_with_system', False)); self.text_clipboard_cb.setChecked(config_data.get('process_text_clipboard', False)); self.file_clipboard_cb.setChecked(config_data.get('process_file_clipboard', True)); self.prompt_enabled_cb.setChecked(config_data.get('prompt_enabled', False)); self.custom_prompt_edit.setText(config_data.get('custom_prompt', ''))
+        self.session_timer = session_timer
+        self.auto_update_cb.setChecked(config_data.get('auto_update_enabled', True))
+        self.start_with_system_cb.setChecked(config_data.get('start_with_system', False))
+        self.text_clipboard_cb.setChecked(config_data.get('process_text_clipboard', False))
+        self.file_clipboard_cb.setChecked(config_data.get('process_file_clipboard', True))
+        self.snipping_clipboard_cb.setChecked(config_data.get('process_snipping_clipboard', True)) # <<< YUUKA: THÊM MỚI
+        self.prompt_enabled_cb.setChecked(config_data.get('prompt_enabled', False))
+        self.custom_prompt_edit.setText(config_data.get('custom_prompt', ''))
         theme_config = config_data.get('theme', {}); self.theme_accent_preview.setText(theme_config.get('accent_color', '#E98973')); self.theme_bg_preview.setText(theme_config.get('sub_win_bg', 'rgba(30,30,30,245)')); self.theme_text_preview.setText(theme_config.get('sub_win_text', '#FFFFFF'))
         font = QFont(); font.setFamily(theme_config.get('sub_win_font_family', 'Segoe UI')); self.font_family_combo.setCurrentFont(font); self.font_size_spinbox.setValue(theme_config.get('sub_win_font_size', 10))
         self.current_pos_mode = config_data.get('sub_window_position', 'auto'); self.pos_button_group.button(({'up':0, 'down':1, 'left':2, 'right':3, 'auto':4}).get(self.current_pos_mode, 4)).setChecked(True)

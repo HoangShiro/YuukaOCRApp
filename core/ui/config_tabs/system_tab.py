@@ -17,10 +17,12 @@ def create_system_tab(self: QWidget) -> QWidget:
     self.start_with_system_cb = QCheckBox("Khởi động cùng System")
     self.text_clipboard_cb = QCheckBox("Bật đọc text clipboard")
     self.file_clipboard_cb = QCheckBox("Xử lý file từ clipboard (Ctrl+C)")
+    self.snipping_clipboard_cb = QCheckBox("Xử lý Snipping Screen") # <<< YUUKA: THÊM MỚI
     general_layout.addWidget(self.auto_update_cb)
     general_layout.addWidget(self.start_with_system_cb)
     general_layout.addWidget(self.text_clipboard_cb)
     general_layout.addWidget(self.file_clipboard_cb)
+    general_layout.addWidget(self.snipping_clipboard_cb) # <<< YUUKA: THÊM MỚI
     general_group.setLayout(general_layout)
     left_layout.addWidget(general_group)
 

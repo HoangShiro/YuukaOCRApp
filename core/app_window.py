@@ -312,6 +312,7 @@ class MainWindow(PhysicsMovableWidget):
             'positions': {}, 'custom_prompt': "LUÔN LUÔN dịch text sang tiếng việt với tone phù hợp với ngữ cảnh/giọng điệu/ngôn ngữ trẻ trung/anime. Chỉ trả về duy nhất text được dịch.",
             'prompt_enabled': False, 'process_text_clipboard': False, 
             'process_file_clipboard': True, 
+            'process_snipping_clipboard': True, # <<< YUUKA: THÊM MỚI
             'auto_update_enabled': True,
             'start_with_system': False,
             'ui_scale': 100, 'close_button_color': self.app_configs.get("CLOSE_BUTTON_COLOR_RGB"), 
