@@ -178,7 +178,7 @@ class ConfigWindow(PhysicsMovableWidget):
         self.theme_close_button_preview.setStyleSheet(f"background-color: {close_btn_hex}; border: 1px solid {text_color}44;"); self.theme_close_button_preview.setText(close_btn_hex)
         self.adjustSize()
 
-    def _run_update_check_in_thread(self): status, message, details = update.check_for_updates(); self.updateCheckCompleted.emit(status, message, details)
+    def _run_update_check_in_thread(self): status, message, details, _ = update.check_for_updates(); self.updateCheckCompleted.emit(status, message, details)
     def _on_update_check_completed(self, status, message, details):
         self.update_status_label.setText(message)
         self.update_button.hide()
