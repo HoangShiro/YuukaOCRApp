@@ -15,6 +15,10 @@ class Logger(QObject):
         self.log_path = log_path
         self.lock = threading.Lock()
         self.log_data = self._load_log()
+        
+        # YUUKA UPDATE: Chạy hàm dọn dẹp prompt trùng lặp khi khởi tạo
+        self._cleanup_duplicate_prompts()
+
         self.start_time = datetime.now()
 
     def _get_default_log_structure(self):
@@ -117,8 +121,9 @@ class Logger(QObject):
             if 'recent_prompts' not in self.log_data or not isinstance(self.log_data['recent_prompts'], list):
                 self.log_data['recent_prompts'] = []
 
-            # YUUKA: Tăng giới hạn lên 100
             prompts = deque(self.log_data['recent_prompts'], maxlen=100)
+            
+            # YUUKA UPDATE: Chỉ thêm nếu prompt chưa tồn tại trong lịch sử
             if not any(entry['text'] == text for entry in prompts):
                 log_entry = {
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -126,8 +131,8 @@ class Logger(QObject):
                 }
                 prompts.appendleft(log_entry)
                 self.log_data['recent_prompts'] = list(prompts)
-                self.console_log("Prompt tùy chỉnh đã được cập nhật.")
-        self._save_log()
+                self.console_log("Prompt tùy chỉnh đã được cập nhật và lưu.")
+                self._save_log() # Chỉ lưu file khi có sự thay đổi
 
     def log_source(self, source_type: str, detail: str = None):
         with self.lock:
@@ -165,3 +170,32 @@ class Logger(QObject):
                 self.log_data["recent_prompts"] = []
                 self.console_log("Đã xóa lịch sử prompt.")
         self._save_log()
+
+    # YUUKA: HÀM MỚI ĐỂ DỌN DẸP
+    def _cleanup_duplicate_prompts(self):
+        """Quét và loại bỏ các prompt bị trùng lặp, giữ lại cái mới nhất."""
+        with self.lock:
+            all_prompts = self.log_data.get('recent_prompts', [])
+            if not all_prompts:
+                return
+
+            latest_prompts = {}
+            for entry in all_prompts:
+                # Bỏ qua các entry không hợp lệ
+                if not isinstance(entry, dict) or 'text' not in entry or 'timestamp' not in entry:
+                    continue
+                
+                text = entry['text']
+                # Nếu text chưa có, hoặc entry hiện tại mới hơn entry đã lưu -> cập nhật
+                if text not in latest_prompts or entry['timestamp'] > latest_prompts[text]['timestamp']:
+                    latest_prompts[text] = entry
+            
+            # Lấy các giá trị từ dict và sắp xếp lại theo timestamp giảm dần
+            unique_list = sorted(latest_prompts.values(), key=lambda x: x['timestamp'], reverse=True)
+            
+            # Chỉ ghi lại file nếu có sự thay đổi
+            if len(unique_list) < len(all_prompts):
+                num_removed = len(all_prompts) - len(unique_list)
+                self.log_data['recent_prompts'] = unique_list
+                self.console_log(f"Đã dọn dẹp, loại bỏ {num_removed} prompt trùng lặp.")
+                self._save_log()
