@@ -70,7 +70,7 @@ Sensei có thể yên tâm, Yuuka được thiết kế với sự tôn trọng 
     Click đúp chuột vào file **`YuukaOCR.bat`** để khởi động Yuuka!
 
 4.  **Thêm API Key**:
-    Sau chạy ứng dụng lần đầu, Yuuka sẽ yêu cầu API key. Sensei chỉ cần copy key và Yuuka sẽ tự động xử lý. Hoặc Sensei có thể chuột phải vào Yuuka để thêm API key.
+    Khi chạy ứng dụng lần đầu, Yuuka sẽ yêu cầu API key. Sensei chỉ cần copy key và Yuuka sẽ tự động xử lý. Hoặc Sensei có thể chuột phải vào Yuuka để thêm API key.
 
 ## 📖 Hướng dẫn sử dụng
 
