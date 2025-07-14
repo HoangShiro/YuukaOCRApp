@@ -67,7 +67,7 @@ Sensei có thể yên tâm, Yuuka được thiết kế với sự tôn trọng 
     Script này sẽ tự động tạo môi trường ảo và cài đặt tất cả các thư viện Python cần thiết (`PySide6`, `google-generativeai`, `pynput`, v.v.).
 
 3.  **Khởi động**:
-    Click đúp chuột vào file **`YuukaOCR.bat`** để khởi động Yuuka!
+    Click đúp chuột vào file **`YuukaOCR.vbs`** để khởi động Yuuka!
 
 4.  **Thêm API Key**:
     Khi chạy ứng dụng lần đầu, Yuuka sẽ yêu cầu API key. Sensei chỉ cần copy key và Yuuka sẽ tự động xử lý. Hoặc Sensei có thể chuột phải vào Yuuka để thêm API key.
