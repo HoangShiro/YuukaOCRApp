@@ -49,7 +49,6 @@ def restart_application():
     if os.path.exists(run_bat_path):
         subprocess.Popen([run_bat_path], shell=True)
     else:
-        # Fallback if RUN.bat is missing
         subprocess.Popen([sys.executable] + sys.argv, shell=True)
     QApplication.quit()
 
@@ -64,36 +63,34 @@ def main():
     
     user_config = load_configs(USER_CONFIG_FILENAME)
     if user_config.get('auto_update_enabled', True):
-        # YUUKA: Unpack giá trị boolean mới (requirements_changed)
         status, message, _, requirements_changed = update.check_for_updates()
         if status == update.UPDATE_STATUS['AHEAD']:
             logger.console_log("Phát hiện phiên bản mới, bắt đầu cập nhật.")
-            
-            update_msg = "Đang tiến hành cập nhật."
-            if requirements_changed:
-                update_msg += "\nCác thư viện sẽ được cài đặt lại. Vui lòng đợi nhé senpai!"
-            else:
-                update_msg += "\nSẽ khởi động lại ngay sau khi xong!"
-
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Information)
             msg_box.setText("Có phiên bản Yuuka mới!")
-            msg_box.setInformativeText(update_msg)
+
+            # YUUKA: Thay đổi nội dung thông báo dựa trên việc requirements.txt có thay đổi hay không
+            if requirements_changed:
+                info_text = "Đang tiến hành cập nhật và cài đặt lại các thư viện cần thiết. Vui lòng đợi nhé senpai!"
+                logger.console_log("-> Thay đổi thư viện được phát hiện (requirements.txt).")
+            else:
+                info_text = "Đang tiến hành cập nhật. Ứng dụng sẽ khởi động lại sau khi hoàn tất."
+                logger.console_log("-> Không có thay đổi thư viện, chỉ cập nhật code.")
+            
+            msg_box.setInformativeText(info_text)
             msg_box.setWindowTitle("Đang cập nhật")
             msg_box.setStandardButtons(QMessageBox.Ok)
             msg_box.show()
             QApplication.processEvents()
             
             update.perform_update()
-
-            # YUUKA: Logic điều kiện mới
+            
+            # YUUKA: Chạy INSTALL.bat chỉ khi cần thiết
             if requirements_changed:
-                logger.console_log("`requirements.txt` đã thay đổi, đang chạy INSTALL.bat...")
                 run_install_and_exit()
             else:
-                logger.console_log("`requirements.txt` không thay đổi, chỉ khởi động lại ứng dụng.")
                 restart_application()
-                sys.exit(0) # Thoát tiến trình hiện tại sau khi đã yêu cầu khởi động lại
 
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)

@@ -35,7 +35,7 @@ def check_for_updates():
     Kiểm tra xem có bản cập nhật hay không.
     Trả về một tuple: (status_code, message, commit_details, requirements_changed).
     commit_details là một dict {'message': str, 'date': str} hoặc None.
-    requirements_changed là một boolean.
+    requirements_changed là một boolean cho biết file requirements.txt có thay đổi không.
     """
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if not os.path.isdir(os.path.join(project_root, '.git')):
@@ -73,11 +73,10 @@ def check_for_updates():
         if is_ancestor.returncode == 0:
             details = get_commit_details('origin/main')
             
-            # YUUKA: Kiểm tra xem requirements.txt có thay đổi không
-            # Lệnh `git diff --quiet` sẽ trả về 1 nếu có sự khác biệt, 0 nếu không.
-            req_check_result = run_command(['git', 'diff', '--quiet', 'HEAD', 'origin/main', '--', 'requirements.txt'])
-            requirements_changed = req_check_result.returncode != 0
-            
+            # YUUKA: Kiểm tra sự thay đổi của requirements.txt
+            diff_result = run_command(['git', 'diff', '--name-only', 'HEAD', 'origin/main'])
+            requirements_changed = 'requirements.txt' in diff_result.stdout.splitlines()
+
             return UPDATE_STATUS["AHEAD"], "Có phiên bản mới! Sẵn sàng cập nhật.", details, requirements_changed
         else:
             details = get_commit_details('HEAD')
