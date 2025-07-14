@@ -20,6 +20,17 @@ https://github.com/user-attachments/assets/11510fe9-a5ef-4176-a633-6443beccad0f
 
 ---
 
+### 🔒 Quyền riêng tư và Dữ liệu
+
+Sensei có thể yên tâm, Yuuka được thiết kế với sự tôn trọng quyền riêng tư tuyệt đối:
+
+*   **Không thu thập dữ liệu**: Ứng dụng **không** thu thập, lưu trữ hay gửi bất kỳ dữ liệu cá nhân nào của Sensei về máy chủ của tác giả. Mọi hoạt động đều diễn ra trên máy tính của bạn.
+*   **Sử dụng API Gemini**: Để thực hiện các tác vụ (như OCR, dịch thuật), dữ liệu bạn cung cấp (hình ảnh, nội dung file, văn bản) sẽ được gửi đến máy chủ của Google để xử lý bởi model Gemini. Việc sử dụng này tuân theo [Chính sách Bảo mật](https://policies.google.com/privacy) và [Điều khoản Dịch vụ](https://ai.google.dev/terms) của Google. Hãy đảm bảo bạn không gửi dữ liệu nhạy cảm qua API.
+*   **Lưu trữ cục bộ**: Toàn bộ cấu hình của Sensei (`user_config.json`), API key (`.env`) và lịch sử hoạt động (`log.json`) được lưu trữ **hoàn toàn trên máy tính của bạn** trong thư mục `user/`.
+*   **Đóng góp và Báo lỗi**: Dự án chỉ nhận các đóng góp, báo lỗi và yêu cầu tính năng thông qua [Issues trên GitHub](https://github.com/HoangShiro/YuukaOCRApp/issues). Tác giả không yêu cầu thông tin cá nhân hay dữ liệu qua bất kỳ kênh nào khác.
+
+---
+
 ## ✨ Tính năng nổi bật
 
 *   **Giao diện Vật lý Độc đáo**: Yuuka di chuyển trên màn hình với hiệu ứng vật lý (lò xo, giảm chấn) mềm mại và vui mắt, thay vì chỉ di chuyển cứng nhắc.
