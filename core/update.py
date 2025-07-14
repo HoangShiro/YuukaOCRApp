@@ -33,25 +33,26 @@ def run_command(command):
 def check_for_updates():
     """
     Kiểm tra xem có bản cập nhật hay không.
-    Trả về một tuple: (status_code, message, commit_details).
+    Trả về một tuple: (status_code, message, commit_details, requirements_changed).
     commit_details là một dict {'message': str, 'date': str} hoặc None.
+    requirements_changed là một boolean.
     """
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if not os.path.isdir(os.path.join(project_root, '.git')):
-        return UPDATE_STATUS["NOT_A_GIT_REPO"], "Đây không phải là một repo Git.", None
+        return UPDATE_STATUS["NOT_A_GIT_REPO"], "Đây không phải là một repo Git.", None, False
 
     if run_command(['git', '--version']).returncode != 0:
-        return UPDATE_STATUS["GIT_NOT_FOUND"], "Không tìm thấy Git trên hệ thống.", None
+        return UPDATE_STATUS["GIT_NOT_FOUND"], "Không tìm thấy Git trên hệ thống.", None, False
     
     fetch_result = run_command(['git', 'fetch', 'origin'])
     if fetch_result.returncode != 0:
-        return UPDATE_STATUS["FETCH_FAILED"], f"Lỗi khi fetch: {fetch_result.stderr.strip()}", None
+        return UPDATE_STATUS["FETCH_FAILED"], f"Lỗi khi fetch: {fetch_result.stderr.strip()}", None, False
 
     local_hash = run_command(['git', 'rev-parse', 'HEAD']).stdout.strip()
     remote_hash = run_command(['git', 'rev-parse', 'origin/main']).stdout.strip()
     
     if not local_hash or not remote_hash:
-        return UPDATE_STATUS["ERROR"], "Không thể lấy thông tin commit.", None
+        return UPDATE_STATUS["ERROR"], "Không thể lấy thông tin commit.", None, False
 
     def get_commit_details(ref='HEAD'):
         """Lấy thông tin commit cho một ref cụ thể (mặc định là HEAD)."""
@@ -66,15 +67,21 @@ def check_for_updates():
 
     if local_hash == remote_hash:
         details = get_commit_details('HEAD')
-        return UPDATE_STATUS["UP_TO_DATE"], "Bạn đang ở phiên bản mới nhất.", details
+        return UPDATE_STATUS["UP_TO_DATE"], "Bạn đang ở phiên bản mới nhất.", details, False
     else:
         is_ancestor = run_command(['git', 'merge-base', '--is-ancestor', 'HEAD', 'origin/main'])
         if is_ancestor.returncode == 0:
             details = get_commit_details('origin/main')
-            return UPDATE_STATUS["AHEAD"], "Có phiên bản mới! Sẵn sàng cập nhật.", details
+            
+            # YUUKA: Kiểm tra xem requirements.txt có thay đổi không
+            # Lệnh `git diff --quiet` sẽ trả về 1 nếu có sự khác biệt, 0 nếu không.
+            req_check_result = run_command(['git', 'diff', '--quiet', 'HEAD', 'origin/main', '--', 'requirements.txt'])
+            requirements_changed = req_check_result.returncode != 0
+            
+            return UPDATE_STATUS["AHEAD"], "Có phiên bản mới! Sẵn sàng cập nhật.", details, requirements_changed
         else:
             details = get_commit_details('HEAD')
-            return UPDATE_STATUS["UP_TO_DATE"], "Repo đã bị thay đổi. Vui lòng cập nhật thủ công.", details
+            return UPDATE_STATUS["UP_TO_DATE"], "Repo đã bị thay đổi. Vui lòng cập nhật thủ công.", details, False
 
 
 def perform_update():
