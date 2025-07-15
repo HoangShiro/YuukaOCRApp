@@ -1,4 +1,5 @@
 # core/ui/config_tabs/log_tab.py
+import json
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                                QScrollArea, QFrame, QApplication)
 from PySide6.QtGui import QFontMetrics
@@ -53,28 +54,57 @@ def create_log_tab(self: QWidget) -> QWidget:
         pyperclip.copy(text)
         parent_window.parent().update_status("Đã copy vào clipboard!", 2000)
 
-    # YUUKA: Dùng QPushButton và cắt ngắn text theo ký tự
     def create_log_entry(entry_data, layout, parent_window):
         if not isinstance(entry_data, dict): return
 
         timestamp = entry_data.get("timestamp", "")
-        text_content = entry_data.get("text", "")
-        display_text = text_content.replace('\n', ' ')
+        content = entry_data.get("text", "")
+        
+        # --- YUUKA'S ROBUST FIX ---
+        text_to_copy = "Lỗi Log"
+        display_text_full = "Lỗi Log"
 
-        # Cắt ngắn text theo số ký tự
-        char_limit = 35
-        if len(display_text) > char_limit:
-            elided_text = display_text[:char_limit] + "..."
-        else:
-            elided_text = display_text
+        if isinstance(content, dict):
+            # Luôn hiển thị đầy đủ JSON trong tooltip để debug
+            display_text_full = json.dumps(content, ensure_ascii=False, indent=2)
+            
+            # Ưu tiên lấy `extracted_text`
+            extracted = content.get("extracted_text", "")
+            
+            # Xử lý trường hợp `extracted_text` là một chuỗi JSON
+            if isinstance(extracted, str) and extracted.strip().startswith('{'):
+                try:
+                    inner_data = json.loads(extracted)
+                    # Ưu tiên lấy text đã dịch từ JSON bên trong
+                    text_to_copy = inner_data.get("translated_text", inner_data.get("original_text", extracted))
+                except json.JSONDecodeError:
+                    text_to_copy = extracted # Nếu parse lỗi, dùng chuỗi gốc
+            else:
+                 # Trường hợp bình thường, `extracted` là text
+                 text_to_copy = extracted if extracted else content.get("translated_text", "")
+
+            # Fallback cuối cùng nếu không tìm thấy gì
+            if not text_to_copy:
+                 text_to_copy = display_text_full
+
+        elif isinstance(content, str):
+            # Xử lý log cũ có định dạng là string
+            text_to_copy = content
+            display_text_full = content
+        
+        # Cắt ngắn text để hiển thị trên button
+        elided_text = text_to_copy.replace('\n', ' ')
+        if len(elided_text) > 40:
+            elided_text = elided_text[:40] + "..."
             
         entry_button = QPushButton(elided_text)
         entry_button.setObjectName("logEntryButton")
 
-        full_tooltip = f"{timestamp}\n\n{text_content}"
+        # Tooltip sẽ là timestamp + nội dung đầy đủ
+        full_tooltip = f"{timestamp}\n\n{display_text_full}"
         entry_button.setToolTip(full_tooltip)
         
-        entry_button.clicked.connect(lambda: copy_text(text_content, parent_window))
+        entry_button.clicked.connect(lambda: copy_text(text_to_copy, parent_window))
         layout.addWidget(entry_button)
 
     self.log_widgets['create_entry_func'] = create_log_entry
