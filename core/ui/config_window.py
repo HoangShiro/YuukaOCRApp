@@ -39,7 +39,7 @@ class ConfigWindow(PhysicsMovableWidget):
         self.drag_pos = None; self.current_pos_mode = 'auto'
         self.container = QWidget(self); self.container.setObjectName("container")
         self.session_timer = None
-        self.color_picker_dialog = None # YUUKA: Thêm để quản lý dialog color picker
+        self.color_picker_dialog = None 
 
         self._setup_ui()
         self.apply_stylesheet({}, {}, {})
@@ -98,8 +98,11 @@ class ConfigWindow(PhysicsMovableWidget):
     def _connect_signals(self):
         self.auto_update_cb.stateChanged.connect(self._emit_changes); self.start_with_system_cb.stateChanged.connect(self._emit_changes)
         self.text_clipboard_cb.stateChanged.connect(self._emit_changes); self.file_clipboard_cb.stateChanged.connect(self._emit_changes)
-        self.snipping_clipboard_cb.stateChanged.connect(self._emit_changes) # <<< YUUKA: THÊM MỚI
-        self.prompt_enabled_cb.stateChanged.connect(self._emit_changes); self.custom_prompt_edit.textChanged.connect(self._emit_changes)
+        self.snipping_clipboard_cb.stateChanged.connect(self._emit_changes)
+        self.prompt_enabled_cb.stateChanged.connect(self._emit_changes)
+        # YUUKA'S PERFECT FIX: Chỉ comment dòng này để không phát signal khi gõ prompt,
+        # nhưng vẫn giữ các signal khác để có "Live Config".
+        # self.custom_prompt_edit.textChanged.connect(self._emit_changes)
         self.gemini_model_combo.currentIndexChanged.connect(self._emit_changes); self.font_family_combo.currentFontChanged.connect(self._emit_changes)
         self.font_size_spinbox.valueChanged.connect(self._emit_changes); self.update_button.clicked.connect(self._on_update_button_clicked)
         self.api_key_save_button.clicked.connect(self._submit_api_key)
@@ -183,9 +186,8 @@ class ConfigWindow(PhysicsMovableWidget):
         self.update_status_label.setText(message)
         self.update_button.hide()
         
-        # YUUKA: Chỉ cần ẩn/hiện QTextEdit là đủ
         self.update_details_label.hide()
-        self.update_details_label.clear() # Dùng clear() cho QTextEdit
+        self.update_details_label.clear() 
 
         if details:
             commit_msg = details.get('message', 'N/A')
@@ -194,11 +196,9 @@ class ConfigWindow(PhysicsMovableWidget):
             if status == update.UPDATE_STATUS['UP_TO_DATE']: 
                 title = "<b>Thông tin phiên bản hiện tại:</b>"
             
-            # YUUKA FIX: Vẫn giữ logic replace \n bằng <br/>
             commit_msg = commit_msg.replace(os.linesep, '<br/>').replace('\n', '<br/>')
             details_text = f"""<p>{title}<br/>{commit_msg}</p><p><b>Thời gian:</b> {commit_date}</p>"""
             
-            # YUUKA FIX: Dùng setHtml() thay vì setText() cho QTextEdit
             self.update_details_label.setHtml(details_text)
             self.update_details_label.show()
 
@@ -209,7 +209,6 @@ class ConfigWindow(PhysicsMovableWidget):
     def _on_update_button_clicked(self):
         self.update_status_label.setText("Đang cập nhật... Vui lòng không tắt Yuuka nhé!")
         self.update_button.setEnabled(False)
-        # YUUKA: Ẩn QTextEdit khi đang cập nhật
         self.update_details_label.hide()
         QApplication.processEvents()
         def update_and_restart_thread(): 
@@ -224,7 +223,7 @@ class ConfigWindow(PhysicsMovableWidget):
         config_data = {
             'auto_update_enabled': self.auto_update_cb.isChecked(), 'start_with_system': self.start_with_system_cb.isChecked(), 
             'process_text_clipboard': self.text_clipboard_cb.isChecked(), 'process_file_clipboard': self.file_clipboard_cb.isChecked(), 
-            'process_snipping_clipboard': self.snipping_clipboard_cb.isChecked(), # <<< YUUKA: THÊM MỚI
+            'process_snipping_clipboard': self.snipping_clipboard_cb.isChecked(),
             'prompt_enabled': self.prompt_enabled_cb.isChecked(), 'custom_prompt': self.custom_prompt_edit.toPlainText().strip(), 
             'theme': theme_data, 'sub_window_position': self.current_pos_mode, 'sub_window_spacing': self.spacing_slider.value(), 
             'min_sub_win_width': self.min_sub_win_width_slider.value(), 'ui_scale': self.ui_scale_slider.value(), 
@@ -240,7 +239,6 @@ class ConfigWindow(PhysicsMovableWidget):
         key = self.api_key_edit.text().strip()
         if key: self.api_key_status_label.setText("Đang xác thực..."); self.api_key_status_label.setStyleSheet("color: #ccc;"); self.apiKeySubmitted.emit(key)
 
-    # YUUKA: Cập nhật lại hoàn toàn logic pick color
     def _pick_color(self, color_type, show_alpha=False):
         if self.color_picker_dialog and self.color_picker_dialog.isVisible():
             self.color_picker_dialog.close()
@@ -251,7 +249,6 @@ class ConfigWindow(PhysicsMovableWidget):
         
         self.color_picker_dialog = ThemedColorDialog(initial_color, show_alpha, current_theme_config, self)
         
-        # Kết nối signal từ dialog picker tới một slot để xử lý kết quả
         self.color_picker_dialog.color_accepted.connect(
             lambda color: self._on_color_picked_and_accepted(color, color_type)
         )
@@ -275,7 +272,7 @@ class ConfigWindow(PhysicsMovableWidget):
         self.start_with_system_cb.setChecked(config_data.get('start_with_system', False))
         self.text_clipboard_cb.setChecked(config_data.get('process_text_clipboard', False))
         self.file_clipboard_cb.setChecked(config_data.get('process_file_clipboard', True))
-        self.snipping_clipboard_cb.setChecked(config_data.get('process_snipping_clipboard', True)) # <<< YUUKA: THÊM MỚI
+        self.snipping_clipboard_cb.setChecked(config_data.get('process_snipping_clipboard', True))
         self.prompt_enabled_cb.setChecked(config_data.get('prompt_enabled', False))
         self.custom_prompt_edit.setText(config_data.get('custom_prompt', ''))
         theme_config = config_data.get('theme', {}); self.theme_accent_preview.setText(theme_config.get('accent_color', '#E98973')); self.theme_bg_preview.setText(theme_config.get('sub_win_bg', 'rgba(30,30,30,245)')); self.theme_text_preview.setText(theme_config.get('sub_win_text', '#FFFFFF'))
@@ -294,7 +291,6 @@ class ConfigWindow(PhysicsMovableWidget):
         self.adjustSize()
         self.update_status_label.setText("Đang kiểm tra update...")
         self.update_button.hide()
-        # YUUKA: Chỉ cần ẩn QTextEdit
         self.update_details_label.hide()
         threading.Thread(target=self._run_update_check_in_thread, daemon=True).start()
 
@@ -360,6 +356,8 @@ class ConfigWindow(PhysicsMovableWidget):
         super().mouseReleaseEvent(event)
     def showEvent(self, event: QShowEvent): super().showEvent(event)
     def hideEvent(self, event: QHideEvent):
+        # YUUKA'S PERFECT FIX: Lưu lại tất cả thay đổi, bao gồm cả prompt, khi cửa sổ bị ẩn.
+        self._emit_changes()
         if self.color_picker_dialog: self.color_picker_dialog.close()
         self.ocr_hotkey_button.stop_capture(); self.window_hidden.emit(); super().hideEvent(event)
     def closeEvent(self, event): super().closeEvent(event)

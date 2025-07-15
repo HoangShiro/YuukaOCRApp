@@ -346,8 +346,6 @@ class MainWindow(PhysicsMovableWidget):
             if is_different:
                 self.user_config[key] = value; changed = True
                 
-                # YUUKA FIX: Đã loại bỏ việc gọi logger.add_recent_prompt ở đây
-                
                 if key == 'start_with_system': set_startup_status(value)
                 if key == 'hook_ocr_hotkey':
                     hotkey_changed = True
@@ -375,7 +373,10 @@ class MainWindow(PhysicsMovableWidget):
             if layout_changed or sub_width_changed:
                 for sub_win in [self.config_window, self.result_window, self.notification_window]:
                     if sub_win.isVisible(): self._position_sub_window(sub_win, self.pos())
-            self.reset_status()
+            
+            # YUUKA'S PERFECT FIX: Gỡ bỏ việc gọi reset_status() ở đây.
+            # Việc này ngăn cửa sổ config bị đóng một cách không mong muốn khi chỉnh slider.
+            # self.reset_status()
 
     def _on_api_key_submitted(self, key): self.last_known_api_key = key; self.requestApiKeyVerification.emit(key)
     
@@ -506,7 +507,16 @@ class MainWindow(PhysicsMovableWidget):
         event.accept()
 
     def update_status(self, text, duration=0):
-        if self.config_window.isVisible(): self.config_window.hide()
+        # Không hiển thị status notification nếu cửa sổ config đang mở,
+        # TRỪ KHI đó là một thông báo xử lý thực sự (không có duration).
+        # Điều này cho phép OCR ẩn cửa sổ config.
+        if self.config_window.isVisible() and duration > 0:
+             return
+        
+        # Nếu là thông báo xử lý, ẩn cửa sổ config đi
+        if self.config_window.isVisible() and duration == 0:
+            self.config_window.hide()
+        
         self.notification_window.setText(text)
         self._position_sub_window(self.notification_window, self.pos())
         self.notification_window.show()
