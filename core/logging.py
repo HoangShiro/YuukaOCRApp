@@ -13,11 +13,10 @@ class Logger(QObject):
     def __init__(self, log_path: str):
         super().__init__()
         self.log_path = log_path
-        # YUUKA FIX: Đổi sang RLock để tránh deadlock khi một hàm có lock gọi hàm khác cũng cần lock
         self.lock = threading.RLock() 
         self.log_data = self._load_log()
         
-        # Chạy hàm dọn dẹp prompt trùng lặp khi khởi tạo
+        # YUUKA FIX: Chạy hàm dọn dẹp prompt trùng lặp khi khởi tạo
         self._cleanup_duplicate_prompts()
 
         self.start_time = datetime.now()
@@ -41,11 +40,13 @@ class Logger(QObject):
                 if os.path.exists(self.log_path):
                     with open(self.log_path, 'r', encoding='utf-8') as f:
                         data = json.load(f)
+                    # Đảm bảo các key mới nhất tồn tại trong file log cũ
                     default_data = self._get_default_log_structure()
                     for key, value in default_data.items():
                         if key not in data:
                             data[key] = value
                         elif isinstance(value, dict):
+                            # Đảm bảo các sub-key cũng tồn tại
                             for sub_key, sub_value in value.items():
                                 if sub_key not in data[key]:
                                     data[key][sub_key] = sub_value
@@ -57,13 +58,16 @@ class Logger(QObject):
     def _save_log(self):
         with self.lock:
             try:
+                # Tạo bản sao sâu để tránh lỗi thread-safety với deque
                 log_copy = self.log_data.copy()
                 log_copy['recent_outputs'] = list(log_copy.get('recent_outputs', []))
                 log_copy['recent_prompts'] = list(log_copy.get('recent_prompts', []))
+                
                 os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
                 with open(self.log_path, 'w', encoding='utf-8') as f:
                     json.dump(log_copy, f, ensure_ascii=False, indent=4)
             except IOError as e:
+                # Ghi ra stderr nếu có lỗi nghiêm trọng
                 if sys.__stderr__:
                     sys.__stderr__.write(f"Lỗi nghiêm trọng khi lưu log: {e}\n")
 
@@ -71,12 +75,14 @@ class Logger(QObject):
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_message = f"[{timestamp}] Yuuka: {message}\n"
         self.message_logged.emit(formatted_message)
+        # In ra console gốc nếu có thể
         if sys.__stdout__:
             sys.__stdout__.write(formatted_message)
             sys.__stdout__.flush()
 
     def get_logs(self):
         with self.lock:
+            # Trả về một bản sao để đảm bảo an toàn thread
             return self.log_data.copy()
 
     def log_api_call(self, model_name: str, success: bool, error_message: str = None):
@@ -94,7 +100,8 @@ class Logger(QObject):
                 self.console_log(f"Lỗi API: {error_message}")
         self._save_log()
 
-    def add_recent_output(self, text: str):
+    def add_recent_output(self, data: object):
+        """ YUUKA FIX: Thay đổi signature từ text: str sang data: object để lưu trữ nhất quán """
         with self.lock:
             if 'recent_outputs' not in self.log_data or not isinstance(self.log_data['recent_outputs'], list):
                 self.log_data['recent_outputs'] = []
@@ -102,7 +109,7 @@ class Logger(QObject):
             outputs = deque(self.log_data['recent_outputs'], maxlen=100)
             log_entry = {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "text": text
+                "text": data # Lưu object `data` trực tiếp
             }
             outputs.appendleft(log_entry)
             self.log_data['recent_outputs'] = list(outputs)
@@ -116,6 +123,7 @@ class Logger(QObject):
 
             prompts = deque(self.log_data['recent_prompts'], maxlen=100)
             
+            # Chỉ thêm nếu prompt chưa tồn tại trong lịch sử gần đây
             if not any(entry.get('text') == text for entry in prompts):
                 log_entry = {
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -123,7 +131,7 @@ class Logger(QObject):
                 }
                 prompts.appendleft(log_entry)
                 self.log_data['recent_prompts'] = list(prompts)
-                self.console_log("Prompt tùy chỉnh đã được cập nhật và lưu.")
+                self.console_log("Prompt đã được sử dụng và lưu vào lịch sử.")
                 self._save_log() 
 
     def log_source(self, source_type: str, detail: str = None):
@@ -144,13 +152,15 @@ class Logger(QObject):
             session_seconds = (datetime.now() - self.start_time).total_seconds()
             runtime["total_seconds"] = runtime.get("total_seconds", 0) + session_seconds
             today_str = datetime.now().strftime("%Y-%m-%d")
-            if runtime["today_seconds"].get("date") == today_str:
+            
+            if runtime.get("today_seconds", {}).get("date") == today_str:
                 runtime["today_seconds"]["seconds"] += session_seconds
             else:
-                runtime["today_seconds"]["date"] = today_str
-                runtime["today_seconds"]["seconds"] = session_seconds
+                runtime["today_seconds"] = {"date": today_str, "seconds": session_seconds}
+                
             runtime["last_session_seconds"] = session_seconds
-        self.start_time = datetime.now()
+        
+        self.start_time = datetime.now() # Reset timer cho session tiếp theo
         self._save_log()
 
     def clear_log_section(self, section_name: str):
@@ -164,13 +174,16 @@ class Logger(QObject):
         self._save_log()
 
     def _cleanup_duplicate_prompts(self):
+        """ YUUKA'S NEW FUNCTION: Dọn dẹp các prompt trùng lặp, chỉ giữ lại cái mới nhất """
         with self.lock:
             all_prompts = self.log_data.get('recent_prompts', [])
             if not all_prompts:
                 return
 
             latest_prompts = {}
+            # Lặp qua tất cả các prompt và lưu lại prompt mới nhất cho mỗi nội dung text
             for entry in all_prompts:
+                # Bỏ qua các entry không hợp lệ
                 if not isinstance(entry, dict) or 'text' not in entry or 'timestamp' not in entry:
                     continue
                 
@@ -178,8 +191,10 @@ class Logger(QObject):
                 if text not in latest_prompts or entry['timestamp'] > latest_prompts[text]['timestamp']:
                     latest_prompts[text] = entry
             
+            # Sắp xếp lại danh sách duy nhất theo timestamp giảm dần
             unique_list = sorted(latest_prompts.values(), key=lambda x: x['timestamp'], reverse=True)
             
+            # Nếu có sự thay đổi, ghi lại vào log
             if len(unique_list) < len(all_prompts):
                 num_removed = len(all_prompts) - len(unique_list)
                 self.log_data['recent_prompts'] = unique_list

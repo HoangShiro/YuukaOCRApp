@@ -132,7 +132,6 @@ class HotkeyListener(threading.Thread):
             self.logger.console_log(f"Hotkey: Không thể gán phím tắt '{self.hotkey_str}'. Lỗi: {e}")
 
     def update_hotkey(self, new_hotkey_str):
-        # YUUKA: Bỏ ghi log ở đây, việc ghi log sẽ do MainWindow xử lý
         with self.lock:
             self.hotkey_str = new_hotkey_str.lower().strip() if new_hotkey_str else ""
 
@@ -188,7 +187,6 @@ class MainWindow(PhysicsMovableWidget):
         self.is_processing_request = False
         self.SCALE_LEVELS = [i for i in range(10, 101, 10)] 
         self.hotkey_listener = None
-        # Kết thúc khối di chuyển
 
         self._load_user_config()
         
@@ -212,12 +210,6 @@ class MainWindow(PhysicsMovableWidget):
         self._initial_startup_status_check()
 
     def _initial_startup_status_check(self):
-        """
-        YUUKA: Hàm này đã được viết lại hoàn toàn!
-        Kiểm tra trực tiếp sự tồn tại của file .env và key khi khởi động
-        để đưa ra thông báo trạng thái ban đầu chính xác hơn,
-        thay vì chờ tín hiệu từ plugin.
-        """
         env_path = os.path.join(self.user_dir, '.env')
         key_found = False
 
@@ -225,28 +217,22 @@ class MainWindow(PhysicsMovableWidget):
             try:
                 with open(env_path, 'r', encoding='utf-8') as f:
                     for line in f:
-                        # Tìm dòng chứa key và đảm bảo nó có giá trị
                         if line.strip().startswith('GOOGLE_API_KEY='):
                             key_value = line.split('=', 1)[1].strip()
                             if key_value:
                                 key_found = True
-                                break  # Đã tìm thấy, không cần đọc thêm
+                                break
             except Exception as e:
-                # Ghi log nếu có lỗi khi đọc file, nhưng vẫn tiếp tục an toàn
                 self.logger.console_log(f"Lỗi khi đọc file .env ban đầu: {e}")
 
         if key_found:
-            # Nếu tìm thấy key, ta tạm thời giả định nó hợp lệ.
-            # Plugin sẽ xác thực lại trong nền và gửi tín hiệu nếu key sai.
             self.is_api_key_needed = False
-            self.update_status("...") # Khởi tạo window thông báo trong lần đầu khởi động.
+            self.update_status("...")
             self.update_status("Wake wake~", 3000)
-            # Sau 2 giây, chuyển về trạng thái chờ mặc định.
             QTimer.singleShot(2100, self.reset_status)
         else:
-            # Nếu không tìm thấy file hoặc key, giữ nguyên trạng thái cần key.
             self.is_api_key_needed = True
-            self.update_status("...") # Khởi tạo window thông báo trong lần đầu khởi động.
+            self.update_status("...")
             self.update_status("Copy Gemini API key đi~")
 
     def _get_current_physics_config(self):
@@ -280,7 +266,6 @@ class MainWindow(PhysicsMovableWidget):
         self.move(QPoint(last_pos_config['x'], last_pos_config['y']))
         self.current_pos_f = QPointF(self.pos())
         self.target_pos_f = QPointF(self.pos())
-        # YUUKA: Bỏ self.reset_status() ở đây.
 
     def connect_internal_signals(self):
         self.config_window.config_changed.connect(self._on_config_changed)
@@ -312,7 +297,7 @@ class MainWindow(PhysicsMovableWidget):
             'positions': {}, 'custom_prompt': "LUÔN LUÔN dịch text sang tiếng việt với tone phù hợp với ngữ cảnh/giọng điệu/ngôn ngữ trẻ trung/anime. Chỉ trả về duy nhất text được dịch.",
             'prompt_enabled': False, 'process_text_clipboard': False, 
             'process_file_clipboard': True, 
-            'process_snipping_clipboard': True, # <<< YUUKA: THÊM MỚI
+            'process_snipping_clipboard': True,
             'auto_update_enabled': True,
             'start_with_system': False,
             'ui_scale': 100, 'close_button_color': self.app_configs.get("CLOSE_BUTTON_COLOR_RGB"), 
@@ -351,34 +336,22 @@ class MainWindow(PhysicsMovableWidget):
         except Exception as e: self.logger.console_log(f"Không thể lưu cấu hình người dùng. Lỗi: {e}")
 
     def _on_config_changed(self, new_config_values):
-        changed = False
-        layout_changed = False
-        theme_related_changed = False
-        physics_changed = False 
-        hotkey_changed = False
-        sub_width_changed = False
+        changed = False; layout_changed = False; theme_related_changed = False
+        physics_changed = False; hotkey_changed = False; sub_width_changed = False
 
         for key, value in new_config_values.items():
             current_value = self.user_config.get(key)
-            if isinstance(value, dict):
-                is_different = current_value != value
-            else:
-                is_different = current_value is None or (abs(current_value - value) > 1e-9 if isinstance(current_value, float) and isinstance(value, float) else current_value != value)
+            is_different = current_value is None or (current_value != value)
 
             if is_different:
-                self.user_config[key] = value
-                changed = True
+                self.user_config[key] = value; changed = True
                 
-                if key == 'custom_prompt' and self.user_config.get('prompt_enabled'):
-                    self.logger.add_recent_prompt(value)
-
-                if key == 'start_with_system':
-                    set_startup_status(value)
+                # YUUKA FIX: Đã loại bỏ việc gọi logger.add_recent_prompt ở đây
                 
+                if key == 'start_with_system': set_startup_status(value)
                 if key == 'hook_ocr_hotkey':
                     hotkey_changed = True
                     self.logger.console_log(f"Hotkey OCR được đổi thành: '{value}'")
-
                 if key in ['sub_window_position', 'sub_window_spacing']: layout_changed = True
                 if key in ['theme', 'ui_scale', 'close_button_color']: theme_related_changed = True
                 if key.startswith('PHYSICS_'): physics_changed = True
@@ -387,28 +360,21 @@ class MainWindow(PhysicsMovableWidget):
         if changed:
             self._save_user_config(from_config_window=True)
             self.userConfigChanged.emit(self.user_config)
-
             if theme_related_changed:
                 if 'ui_scale' in new_config_values: self._apply_scale()
                 self._apply_global_theme()
-
             if physics_changed:
                 physics_cfg = self._get_current_physics_config()
                 for win in [self, self.config_window, self.result_window, self.notification_window, self.selection_overlay]:
                     if win: win.set_physics_params(physics_cfg)
-            
-            if sub_width_changed:
-                self._apply_sub_window_min_width()
-
+            if sub_width_changed: self._apply_sub_window_min_width()
             if hotkey_changed:
                 new_hotkey = self.user_config.get('hook_ocr_hotkey')
                 if self.hotkey_listener and new_hotkey:
                      self.hotkey_listener.update_hotkey(new_hotkey)
-
             if layout_changed or sub_width_changed:
                 for sub_win in [self.config_window, self.result_window, self.notification_window]:
                     if sub_win.isVisible(): self._position_sub_window(sub_win, self.pos())
-            
             self.reset_status()
 
     def _on_api_key_submitted(self, key): self.last_known_api_key = key; self.requestApiKeyVerification.emit(key)
@@ -712,28 +678,17 @@ class MainWindow(PhysicsMovableWidget):
         if self.config_window.isVisible():
             self.config_window.hide()
         else:
-            if self.is_hooked:
-                self.unhook()
-            
+            if self.is_hooked: self.unhook()
             self.stop_hotkey_listener()
-            
             time.sleep(0.1)
-
             api_info = {'key': self.last_known_api_key, 'verified': not self.is_api_key_needed, 'models': self.available_models}
-            
             self.config_window.load_config(
-                self.user_config, 
-                self.app_configs, 
-                api_info, 
-                self.base_ui_pixmap, 
-                self.logger.get_logs(),
+                self.user_config, self.app_configs, api_info, 
+                self.base_ui_pixmap, self.logger.get_logs(),
                 self.session_timer 
             )
-            
             self._position_sub_window(self.config_window, self.pos())
-            self.config_window.show()
-            self.config_window.activateWindow()
-            self.config_window.setFocus()
+            self.config_window.show(); self.config_window.activateWindow(); self.config_window.setFocus()
 
     def _position_sub_window(self, sub_window, main_window_pos):
         main_rect = QRect(main_window_pos, self.size())
@@ -768,18 +723,14 @@ class MainWindow(PhysicsMovableWidget):
         if not sub_window.isVisible(): sub_window.move(target_pos)
         else: sub_window.set_animated_target(target_pos)
 
-    # YUUKA: CÁC HÀM XỬ LÝ TÍN HIỆU TỪ PLUGIN (ĐÃ ĐƯỢỢC CẬP NHẬT)
     def handle_api_key_needed(self):
         self.is_api_key_needed = True; self.last_known_api_key = ""; self.available_models = []
         self.config_window.update_api_key_status(self.last_known_api_key, False, [])
-        # YUUKA FIX: Trực tiếp cập nhật trạng thái thay vì gọi reset_status() bị chặn.
-        # Thông báo này là trạng thái mặc định mới, nên không cần timeout.
         self.update_status("Copy Gemini API key đi~")
         
     def handle_api_key_failed(self, attempted_key):
         self.is_api_key_needed = True; self.last_known_api_key = attempted_key; self.available_models = []
         self.config_window.update_api_key_status(self.last_known_api_key, False, [])
-        # YUUKA FIX: Hiển thị lỗi ngay lập tức, sau đó một lúc mới reset về trạng thái "Copy key"
         self.update_status("Key không hợp lệ!", 3000)
         QTimer.singleShot(3100, self.reset_status)
         
@@ -788,12 +739,8 @@ class MainWindow(PhysicsMovableWidget):
         self.config_window.update_api_key_status(key, True, models)
         if not self.config_window.isVisible():
             self.update_status("Key OK!", 2000)
-            # Sau khi hiển thị "Key OK!", đợi một chút rồi mới reset về trạng thái chờ mặc định.
             QTimer.singleShot(2100, self.reset_status)
-        else:
-            # Nếu cửa sổ config đang mở thì không cần làm gì thêm.
-            pass
-
+        
     def handle_processing_started(self):
         self.is_processing_request = True
 

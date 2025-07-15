@@ -17,7 +17,7 @@ except ImportError:
     print("Yuuka: Vui lòng cài đặt bằng lệnh: pip install pywin32 pillow google-generativeai python-dotenv")
 
 from PySide6.QtCore import QTimer, QObject, Signal, QRect
-from core.logging import Logger # YUUKA: Import Logger
+from core.logging import Logger
 
 class GeminiOCRPlugin(QObject):
     updateStatus = Signal(str, int)
@@ -30,11 +30,11 @@ class GeminiOCRPlugin(QObject):
     processingStarted = Signal()
     processingComplete = Signal()
 
-    def __init__(self, user_config_path, app_configs, logger: Logger): # YUUKA: Nhận logger
+    def __init__(self, user_config_path, app_configs, logger: Logger):
         super().__init__()
         self.user_config_path = user_config_path
         self.app_configs = app_configs
-        self.logger = logger # YUUKA: Lưu logger
+        self.logger = logger
         self.user_config = {}
         self._load_user_config()
 
@@ -125,13 +125,12 @@ class GeminiOCRPlugin(QObject):
             except Exception: pass
             return
         
-        # <<< YUUKA: THÊM MỚI >>>
         if self._get_user_config_value('process_snipping_clipboard', True):
             try:
                 img = ImageGrab.grabclipboard()
                 if isinstance(img, (Image.Image, PngImagePlugin.PngImageFile)) and self._is_new_content(img.tobytes()):
                     self.last_clipboard_content = img.tobytes()
-                    self.logger.log_source("image_clipboard") # YUUKA: Log source
+                    self.logger.log_source("image_clipboard")
                     threading.Thread(target=self._process_with_error_handling, args=(self.process_image_in_thread, img), daemon=True).start()
                     return
             except Exception: pass
@@ -144,7 +143,7 @@ class GeminiOCRPlugin(QObject):
                     if files and self._is_new_content(files[0]):
                         self.last_clipboard_content = files[0]
                         if self._is_valid_file(self.last_clipboard_content):
-                            self.logger.log_source("file_clipboard", self.last_clipboard_content) # YUUKA: Log source
+                            self.logger.log_source("file_clipboard", self.last_clipboard_content)
                             threading.Thread(target=self._process_with_error_handling, args=(self.process_file_in_thread, self.last_clipboard_content), daemon=True).start()
                             try: win32clipboard.CloseClipboard()
                             except Exception: pass
@@ -159,7 +158,7 @@ class GeminiOCRPlugin(QObject):
                 cb_text = pyperclip.paste()
                 if cb_text and cb_text.strip() and self._is_new_content(cb_text):
                     self.last_clipboard_content = cb_text
-                    self.logger.log_source("text_clipboard") # YUUKA: Log source
+                    self.logger.log_source("text_clipboard")
                     threading.Thread(target=self._process_with_error_handling, args=(self.process_text_in_thread, cb_text), daemon=True).start()
             except Exception: pass
 
@@ -176,19 +175,23 @@ class GeminiOCRPlugin(QObject):
     def _get_combined_prompt(self, base_prompt):
         if self._get_user_config_value('prompt_enabled', False):
             custom_prompt = self._get_user_config_value('custom_prompt', '').strip()
-            # YUUKA: Log prompt mới
-            self.logger.add_recent_prompt(custom_prompt)
-            if custom_prompt: return f"{base_prompt}\n\nAdditionally, strictly follow this user instruction: {custom_prompt}"
+            # YUUKA FIX: Chỉ log prompt khi nó thực sự được sử dụng
+            if custom_prompt:
+                self.logger.add_recent_prompt(custom_prompt)
+                return f"{base_prompt}\n\nAdditionally, strictly follow this user instruction: {custom_prompt}"
         return base_prompt
 
     def process_and_copy_result(self, response, model_name):
+        data = None
         try:
             clean_text = response.text.strip()
             if clean_text.startswith("```json"): clean_text = clean_text[7:-3].strip()
             elif clean_text.startswith("```"): clean_text = clean_text[3:-3].strip()
-            data = None
-            try: data = json.loads(clean_text)
+            
+            try: 
+                data = json.loads(clean_text)
             except json.JSONDecodeError:
+                # Cố gắng sửa lỗi JSON không hoàn chỉnh
                 key_marker = '"extracted_text": "'; start_idx = clean_text.find(key_marker)
                 if start_idx != -1:
                     content_start = start_idx + len(key_marker)
@@ -199,27 +202,35 @@ class GeminiOCRPlugin(QObject):
                     if end_idx != -1:
                          extracted = clean_text[content_start:end_idx].replace('\\"', '"')
                          data = {"extracted_text": extracted}
-                if not data: raise
-            result_text = data.get("extracted_text", "") if data else ""
+                if not data: raise # Nếu vẫn không sửa được, ném lỗi ra ngoài
+
+            result_text = data.get("extracted_text", "") if isinstance(data, dict) else str(data)
             if not result_text: 
                 self.updateStatus.emit("Yuuka: Hông thấy chữ...", 3000)
-                # YUUKA: Vẫn log là thành công vì API đã trả về, chỉ là không có nội dung
                 self.logger.log_api_call(model_name, success=True)
                 self.processingComplete.emit()
                 return
 
             self.logger.log_api_call(model_name, success=True)
-            self.logger.add_recent_output(result_text)
-            self.just_copied_by_yuuka = True; pyperclip.copy(result_text)
+            # YUUKA FIX: Lưu toàn bộ object `data` vào log, không chỉ text
+            self.logger.add_recent_output(data)
+            
+            self.just_copied_by_yuuka = True
+            pyperclip.copy(result_text)
             self.last_clipboard_content = result_text
             self.showResult.emit(result_text)
             self.updateStatus.emit("Yuuka: Ctrl + v đi!", 3000)
+            
         except Exception as e:
             failed_text = response.text if hasattr(response, 'text') else str(response)
             error_msg = f"Lỗi JSON hoặc xử lý. Response: {failed_text}. Lỗi: {e}"
             self.logger.log_api_call(model_name, success=False, error_message=error_msg)
+            # YUUKA FIX: Vẫn lưu output lỗi vào log để debug
+            if data: self.logger.add_recent_output(data) 
+            else: self.logger.add_recent_output({"error": "Failed to parse JSON", "raw_response": failed_text})
             self.updateStatus.emit("Yuuka: Lỗi response...", 3000)
-        finally: self.processingComplete.emit()
+        finally: 
+            self.processingComplete.emit()
 
     def _process_with_error_handling(self, target_func, *args):
         self.processingStarted.emit()
@@ -254,7 +265,7 @@ class GeminiOCRPlugin(QObject):
         response = self.model.generate_content([prompt, text_content]); self.process_and_copy_result(response, self.model.model_name)
 
     def process_hooked_region_in_thread(self, physical_roi_rect):
-        self.logger.log_source("hooked_ocr") # YUUKA: Log source
+        self.logger.log_source("hooked_ocr")
         bbox = (physical_roi_rect.x(), physical_roi_rect.y(), physical_roi_rect.right() + 1, physical_roi_rect.bottom() + 1)
         img = ImageGrab.grab(bbox=bbox, all_screens=True)
         if img.mode == 'RGBA': img = img.convert('RGB')
@@ -266,13 +277,12 @@ class GeminiOCRPlugin(QObject):
 
     def handle_file_drop_request(self, filepath):
         if self._is_valid_file(filepath):
-            self.logger.log_source("file_drop", detail=filepath) # YUUKA: Log source
+            self.logger.log_source("file_drop", detail=filepath)
             threading.Thread(target=self._process_with_error_handling, args=(self.process_file_in_thread, filepath), daemon=True).start()
         else:
             self.processingComplete.emit()
 
     def handle_user_config_changed(self, new_config):
-        # YUUKA: Log sự thay đổi model
         old_model = self.user_config.get('gemini_model')
         new_model = new_config.get('gemini_model')
         if old_model != new_model:
