@@ -68,7 +68,7 @@ def create_system_tab(self: QWidget) -> QWidget:
     api_hbox = QHBoxLayout()
     api_hbox.addWidget(self.api_key_edit)
     api_hbox.addWidget(self.api_key_save_button)
-    self.gemini_model_label = QLabel("Model Gemini (mặc định: gemini-2.0-flash):")
+    self.gemini_model_label = QLabel("Model Gemini (mặc định: gemini-2.5-flash):")
     self.gemini_model_combo = QComboBox()
     right_layout.addWidget(self.prompt_enabled_cb)
     right_layout.addWidget(self.custom_prompt_edit)

@@ -308,7 +308,7 @@ class MainWindow(PhysicsMovableWidget):
             'PHYSICS_BOUNCE_DAMPING_FACTOR': self.app_configs.get('PHYSICS_BOUNCE_DAMPING_FACTOR'),
             'hook_ocr_hotkey': self.app_configs.get('HOOK_OCR_HOTKEY'),
             'min_sub_win_width': 200,
-            'gemini_model': 'gemini-2.0-flash'
+            'gemini_model': 'gemini-2.5-flash'
         }
         try:
             if os.path.exists(self.user_config_path):
