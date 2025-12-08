@@ -173,9 +173,16 @@ class ConfigWindow(PhysicsMovableWidget):
             #pos_button:checked {{ background-color: {accent_color}; border-color: {text_color}; }}
             QSlider::groove:horizontal {{ border: 1px solid {accent_color}55; height: 3px; background: {accent_color}33; border-radius: 2px; }}
             QSlider::handle:horizontal {{ background: {text_color}; border: 1px solid {accent_color}; width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; }}
-            QAbstractItemView {{ background-color: {bg_color_str}; color: {text_color}; border: 1px solid {accent_color}; selection-background-color: {accent_color}; selection-color: {text_color}; padding: 4px; }}
+            QAbstractItemView {{ background-color: {bg_color_str}; color: {text_color}; border: 1px solid {accent_color}; selection-background-color: {accent_color}; selection-color: {text_color}; padding: 4px; font-family: "{font_family}"; font-size: {font_size}pt; }}
             QAbstractItemView::separator {{ height: 1px; background-color: {text_color}44; margin: 4px 8px; }}
+            QAbstractItemView::item {{ padding: 4px 8px; }}
+            QAbstractItemView::item:hover {{ background-color: {accent_color}66; }}
+            QAbstractItemView::item:selected {{ background-color: {accent_color}; color: {text_color}; }}
             QComboBox QAbstractItemView::item:disabled {{ color: {text_color}44; background-color: transparent; }}
+            QListView {{ background-color: {bg_color_str}; color: {text_color}; border: 1px solid {accent_color}; border-radius: 5px; padding: 4px; font-family: "{font_family}"; font-size: {font_size}pt; }}
+            QListView::item {{ padding: 4px 8px; border-radius: 3px; }}
+            QListView::item:hover {{ background-color: {accent_color}66; }}
+            QListView::item:selected {{ background-color: {accent_color}; color: {text_color}; }}
             #console_output {{ font-family: 'Consolas', 'Courier New', monospace; font-size: 9pt; background-color: {console_bg_color}; border: 1px solid {accent_color}88; color: {text_color}; }}
             QScrollBar:vertical {{ border: none; background-color: {bg_color_str}; width: 10px; margin: 0px 0px 0px 0px; border-radius: 5px;}}
             QScrollBar::handle:vertical {{ background: {accent_color}88; min-height: 20px; border-radius: 5px; }}
