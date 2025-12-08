@@ -234,7 +234,12 @@ class ConfigWindow(PhysicsMovableWidget):
         
         # Get current provider and model (use data to avoid icon prefixes)
         current_provider = self.provider_combo.currentData()
-        current_model = self.gemini_model_combo.currentData() or self.gemini_model_combo.currentText()
+        # For editable combo, prefer currentData (from selection) or fall back to text
+        current_model = self.gemini_model_combo.currentData()
+        if not current_model and self.gemini_model_combo.isEditable():
+            current_model = self.gemini_model_combo.currentText().strip()
+        if not current_model:
+            current_model = self.gemini_model_combo.currentText()
         
         # Update recent providers (max 5, most recent first)
         if current_provider and current_provider not in ['', None]:

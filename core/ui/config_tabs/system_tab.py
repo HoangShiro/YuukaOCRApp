@@ -1,9 +1,9 @@
 # core/ui/config_tabs/system_tab.py
 from PySide6.QtWidgets import (QVBoxLayout, QWidget, QCheckBox, QLabel, QFrame,
                                QLineEdit, QPushButton, QHBoxLayout, QStackedWidget,
-                               QComboBox, QGroupBox, QTextEdit, QScrollArea)
+                               QComboBox, QGroupBox, QTextEdit, QScrollArea, QCompleter)
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtCore import QUrl, Qt
+from PySide6.QtCore import QUrl, Qt, QStringListModel
 
 from plugins.openai_compatible import get_provider_list, PROVIDERS, get_providers_with_api_keys
 
@@ -57,6 +57,7 @@ def populate_provider_combo(combo: QComboBox, recent_providers: list = None, pro
 def populate_model_combo(combo: QComboBox, models: list, recent_models: list = None):
     """
     Populate model combo with recent models first, then remaining models.
+    Sets up search/filter functionality with QCompleter.
     
     Args:
         combo: QComboBox to populate
@@ -69,6 +70,7 @@ def populate_model_combo(combo: QComboBox, models: list, recent_models: list = N
     if not models:
         combo.addItem("Vui lòng xác thực API key")
         combo.setEnabled(False)
+        combo.setEditable(False)
         combo.blockSignals(False)
         return
     
@@ -76,12 +78,14 @@ def populate_model_combo(combo: QComboBox, models: list, recent_models: list = N
         recent_models = []
     
     added_models = set()
+    all_model_names = []  # For completer
     
     # Add recent models first (up to 5)
     for model in recent_models[:5]:
         if model in models and model not in added_models:
             combo.addItem(model, model)
             added_models.add(model)
+            all_model_names.append(model)
     
     # Add separator if we have recent models
     if added_models:
@@ -92,6 +96,19 @@ def populate_model_combo(combo: QComboBox, models: list, recent_models: list = N
         if model not in added_models:
             combo.addItem(model, model)
             added_models.add(model)
+            all_model_names.append(model)
+    
+    # Setup editable mode for search functionality
+    combo.setEditable(True)
+    combo.setInsertPolicy(QComboBox.NoInsert)  # Don't add typed text as new item
+    combo.lineEdit().setPlaceholderText("🔍 Tìm model...")
+    
+    # Setup completer for filtering
+    completer = QCompleter(all_model_names, combo)
+    completer.setCaseSensitivity(Qt.CaseInsensitive)
+    completer.setFilterMode(Qt.MatchContains)  # Match anywhere in the string
+    completer.setCompletionMode(QCompleter.PopupCompletion)
+    combo.setCompleter(completer)
     
     combo.setEnabled(True)
     combo.blockSignals(False)
