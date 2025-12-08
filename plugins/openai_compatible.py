@@ -16,7 +16,9 @@ except ImportError:
     print("Yuuka: Lỗi! Thiếu thư viện Pillow.")
 
 # Provider configurations with base URLs and model list endpoints
+# Reference: https://github.com/cheahjs/free-llm-api-resources
 PROVIDERS = {
+    # === FREE TIER PROVIDERS (No credit card required) ===
     "gemini": {
         "name": "Google AI Studio (Gemini)",
         "base_url": "https://generativelanguage.googleapis.com/v1beta",
@@ -24,6 +26,7 @@ PROVIDERS = {
         "key_prefix": "AIza",
         "docs_url": "https://aistudio.google.com/",
         "supports_vision": True,
+        "free_tier": True,
     },
     "openrouter": {
         "name": "OpenRouter",
@@ -32,6 +35,7 @@ PROVIDERS = {
         "key_prefix": "sk-or-",
         "docs_url": "https://openrouter.ai/",
         "supports_vision": True,
+        "free_tier": True,  # Has :free models
         "extra_headers": {
             "HTTP-Referer": "https://github.com/HoangShiro/YuukaOCR",
             "X-Title": "YuukaOCR"
@@ -43,7 +47,8 @@ PROVIDERS = {
         "api_type": "openai",
         "key_prefix": "gsk_",
         "docs_url": "https://console.groq.com/",
-        "supports_vision": True,
+        "supports_vision": True,  # Llama 3.2 Vision models
+        "free_tier": True,
     },
     "github": {
         "name": "GitHub Models",
@@ -51,7 +56,8 @@ PROVIDERS = {
         "api_type": "openai",
         "key_prefix": "github_pat_",  # or ghp_
         "docs_url": "https://github.com/marketplace/models",
-        "supports_vision": True,
+        "supports_vision": True,  # Llama-3.2-Vision, Phi-4-multimodal
+        "free_tier": True,
     },
     "cerebras": {
         "name": "Cerebras",
@@ -60,6 +66,7 @@ PROVIDERS = {
         "key_prefix": "csk-",
         "docs_url": "https://cloud.cerebras.ai/",
         "supports_vision": False,
+        "free_tier": True,
     },
     "mistral": {
         "name": "Mistral AI",
@@ -67,7 +74,36 @@ PROVIDERS = {
         "api_type": "openai",
         "key_prefix": "",  # Mistral uses various formats
         "docs_url": "https://console.mistral.ai/",
-        "supports_vision": True,
+        "supports_vision": True,  # Pixtral models
+        "free_tier": True,  # Experiment plan with data training opt-in
+    },
+    "cohere": {
+        "name": "Cohere",
+        "base_url": "https://api.cohere.ai/compatibility/v1",  # OpenAI compatibility endpoint
+        "api_type": "openai",
+        "key_prefix": "",
+        "docs_url": "https://cohere.com/",
+        "supports_vision": True,  # c4ai-aya-vision models
+        "free_tier": True,  # 20 req/min, 1000 req/month
+    },
+    "cloudflare": {
+        "name": "Cloudflare Workers AI",
+        "base_url": "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1",
+        "api_type": "openai",
+        "key_prefix": "",
+        "docs_url": "https://developers.cloudflare.com/workers-ai",
+        "supports_vision": True,  # Llama 3.2 Vision
+        "free_tier": True,  # 10,000 neurons/day
+        "requires_account_id": True,
+    },
+    "nvidia_nim": {
+        "name": "NVIDIA NIM",
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "api_type": "openai",
+        "key_prefix": "nvapi-",
+        "docs_url": "https://build.nvidia.com/",
+        "supports_vision": True,  # Llama 4 Maverick/Scout vision
+        "free_tier": True,  # 40 req/min, limited context
     },
     "sambanova": {
         "name": "SambaNova",
@@ -76,6 +112,7 @@ PROVIDERS = {
         "key_prefix": "",
         "docs_url": "https://cloud.sambanova.ai/",
         "supports_vision": False,
+        "free_tier": False,  # $5 trial credits for 3 months
     },
     "huggingface": {
         "name": "HuggingFace Inference",
@@ -84,7 +121,64 @@ PROVIDERS = {
         "key_prefix": "hf_",
         "docs_url": "https://huggingface.co/docs/inference-providers/",
         "supports_vision": True,
+        "free_tier": True,  # $0.10/month credits
     },
+    # === TRIAL CREDIT PROVIDERS ===
+    "fireworks": {
+        "name": "Fireworks AI",
+        "base_url": "https://api.fireworks.ai/inference/v1",
+        "api_type": "openai",
+        "key_prefix": "",
+        "docs_url": "https://fireworks.ai/",
+        "supports_vision": True,
+        "free_tier": False,  # $1 trial credits
+    },
+    "together": {
+        "name": "Together AI",
+        "base_url": "https://api.together.xyz/v1",
+        "api_type": "openai",
+        "key_prefix": "",
+        "docs_url": "https://www.together.ai/",
+        "supports_vision": True,  # Llama-3.2-Vision, Qwen2.5 VL
+        "free_tier": False,  # Trial credits available
+    },
+    "nebius": {
+        "name": "Nebius Token Factory",
+        "base_url": "https://api.tokenfactory.nebius.com/v1",
+        "api_type": "openai",
+        "key_prefix": "",
+        "docs_url": "https://tokenfactory.nebius.com/",
+        "supports_vision": True,
+        "free_tier": False,  # $1 trial credits
+    },
+    "novita": {
+        "name": "Novita AI",
+        "base_url": "https://api.novita.ai/v3/openai",
+        "api_type": "openai",
+        "key_prefix": "",
+        "docs_url": "https://novita.ai/",
+        "supports_vision": True,
+        "free_tier": False,  # $0.5 trial credits for 1 year
+    },
+    "hyperbolic": {
+        "name": "Hyperbolic",
+        "base_url": "https://api.hyperbolic.xyz/v1",
+        "api_type": "openai",
+        "key_prefix": "",
+        "docs_url": "https://app.hyperbolic.xyz/",
+        "supports_vision": True,  # Pixtral, Qwen2.5 VL
+        "free_tier": False,  # $1 trial credits
+    },
+    "scaleway": {
+        "name": "Scaleway Generative APIs",
+        "base_url": "https://api.scaleway.ai/v1",
+        "api_type": "openai",
+        "key_prefix": "",
+        "docs_url": "https://console.scaleway.com/generative-api/",
+        "supports_vision": True,  # Pixtral models
+        "free_tier": False,  # 1,000,000 free tokens
+    },
+    # === CUSTOM ===
     "custom": {
         "name": "Custom (OpenAI Compatible)",
         "base_url": "",  # User provides
@@ -92,6 +186,7 @@ PROVIDERS = {
         "key_prefix": "",
         "docs_url": "",
         "supports_vision": True,
+        "free_tier": False,
     }
 }
 
@@ -181,6 +276,15 @@ class OpenAICompatibleService:
         models = []
         model_info = {}  # Store additional info for sorting
         
+        # Vision model keywords - models that typically support image input
+        vision_keywords = [
+            'vision', 'vl', 'pixtral', 'llava', 'cogvlm', 'qwen-vl', 'qwen2-vl', 'qwen2.5-vl',
+            'gpt-4o', 'gpt-4-turbo', 'gpt-4-vision', 'claude-3', 'gemini', 'gemma-3',
+            'llama-3.2-11b-vision', 'llama-3.2-90b-vision', 'llama-4-maverick', 'llama-4-scout',
+            'phi-4-multimodal', 'moondream', 'bakllava', 'minicpm-v', 'internvl',
+            'aya-vision', 'command-a-vision', 'nova-2-lite'  # Added for newer models
+        ]
+        
         if "data" in data and isinstance(data["data"], list):
             # Standard OpenAI/OpenRouter format
             for model in data["data"]:
@@ -197,10 +301,20 @@ class OpenAICompatibleService:
                 # Extract modality info (OpenRouter specific)
                 architecture = model.get("architecture", {})
                 input_modalities = architecture.get("input_modalities", [])
-                has_vision = "image" in input_modalities
+                has_vision_modality = "image" in input_modalities
                 
-                # Check if it's a free model
-                is_free = prompt_price == 0 or ":free" in model_id.lower()
+                # Also check model name for vision capability
+                model_lower = model_id.lower()
+                has_vision_keyword = any(kw in model_lower for kw in vision_keywords)
+                has_vision = has_vision_modality or has_vision_keyword
+                
+                # Check if it's a free model (multiple detection methods)
+                is_free = (
+                    prompt_price == 0 or 
+                    ":free" in model_id.lower() or
+                    model.get("free", False) or
+                    "free" in model.get("pricing", {}).get("tier", "").lower()
+                )
                 
                 model_info[model_id] = {
                     "is_free": is_free,
@@ -219,16 +333,24 @@ class OpenAICompatibleService:
                     continue
                 if model_id:
                     models.append(model_id)
-                    model_info[model_id] = {"is_free": False, "has_vision": False, "price": 1}
+                    # Check model name for vision capability
+                    model_lower = model_id.lower()
+                    has_vision = any(kw in model_lower for kw in vision_keywords)
+                    model_info[model_id] = {"is_free": False, "has_vision": has_vision, "price": 1}
         
         # Sort models with priority:
         # 1. Free models with vision (best for OCR)
         # 2. Free models
         # 3. Paid models with vision
         # 4. Other models
-        # Within each group, sort by popular model names
+        # Within each group, sort by popular/recommended model names
         
-        priority_keywords = ['gpt', 'claude', 'llama', 'gemma', 'mistral', 'qwen', 'pixtral', 'llava', 'vision']
+        # Priority keywords for popular models (lower index = higher priority)
+        priority_keywords = [
+            'gpt-4o', 'claude-3', 'gemini', 'pixtral', 'llava', 'vision',
+            'gpt', 'claude', 'llama-4', 'llama-3.3', 'llama-3.2', 'llama', 
+            'qwen', 'gemma', 'mistral', 'phi-4', 'deepseek'
+        ]
         
         def model_sort_key(model_id):
             info = model_info.get(model_id, {"is_free": False, "has_vision": False, "price": 1})
@@ -527,12 +649,52 @@ class OpenAICompatibleService:
         return f"API Error: {error_text[:150]}"
 
 
-def get_provider_list() -> List[Dict[str, str]]:
-    """Get list of available providers for UI dropdown"""
-    return [
-        {"id": pid, "name": pconfig["name"], "docs_url": pconfig.get("docs_url", "")}
-        for pid, pconfig in PROVIDERS.items()
-    ]
+def get_provider_list(free_only: bool = False) -> List[Dict[str, Any]]:
+    """
+    Get list of available providers for UI dropdown.
+    
+    Args:
+        free_only: If True, only return providers with free tier
+        
+    Returns:
+        List of provider info dicts sorted by: free_tier first, then vision support
+    """
+    providers = []
+    for pid, pconfig in PROVIDERS.items():
+        if free_only and not pconfig.get("free_tier", False):
+            continue
+        providers.append({
+            "id": pid, 
+            "name": pconfig["name"], 
+            "docs_url": pconfig.get("docs_url", ""),
+            "supports_vision": pconfig.get("supports_vision", False),
+            "free_tier": pconfig.get("free_tier", False)
+        })
+    
+    # Sort: free_tier with vision first, then free_tier, then vision, then others
+    def sort_key(p):
+        free = p.get("free_tier", False)
+        vision = p.get("supports_vision", False)
+        if free and vision:
+            return (0, p["name"])
+        elif free:
+            return (1, p["name"])
+        elif vision:
+            return (2, p["name"])
+        return (3, p["name"])
+    
+    providers.sort(key=sort_key)
+    return providers
+
+
+def get_free_providers() -> List[Dict[str, Any]]:
+    """Get list of free tier providers only"""
+    return get_provider_list(free_only=True)
+
+
+def get_vision_providers() -> List[Dict[str, Any]]:
+    """Get list of providers that support vision/image input"""
+    return [p for p in get_provider_list() if p.get("supports_vision", False)]
 
 
 def detect_provider_from_key(api_key: str) -> Optional[str]:
@@ -540,9 +702,14 @@ def detect_provider_from_key(api_key: str) -> Optional[str]:
     if not api_key:
         return None
     
+    # Check providers with specific key prefixes
     for pid, pconfig in PROVIDERS.items():
         prefix = pconfig.get("key_prefix", "")
         if prefix and api_key.startswith(prefix):
             return pid
+    
+    # Additional detection for GitHub keys (ghp_ format)
+    if api_key.startswith("ghp_"):
+        return "github"
     
     return None
