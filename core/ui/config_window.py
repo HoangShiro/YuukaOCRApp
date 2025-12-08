@@ -174,6 +174,8 @@ class ConfigWindow(PhysicsMovableWidget):
             QSlider::groove:horizontal {{ border: 1px solid {accent_color}55; height: 3px; background: {accent_color}33; border-radius: 2px; }}
             QSlider::handle:horizontal {{ background: {text_color}; border: 1px solid {accent_color}; width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; }}
             QAbstractItemView {{ background-color: {bg_color_str}; color: {text_color}; border: 1px solid {accent_color}; selection-background-color: {accent_color}; selection-color: {text_color}; padding: 4px; }}
+            QAbstractItemView::separator {{ height: 1px; background-color: {text_color}44; margin: 4px 8px; }}
+            QComboBox QAbstractItemView::item:disabled {{ color: {text_color}44; background-color: transparent; }}
             #console_output {{ font-family: 'Consolas', 'Courier New', monospace; font-size: 9pt; background-color: {console_bg_color}; border: 1px solid {accent_color}88; color: {text_color}; }}
             QScrollBar:vertical {{ border: none; background-color: {bg_color_str}; width: 10px; margin: 0px 0px 0px 0px; border-radius: 5px;}}
             QScrollBar::handle:vertical {{ background: {accent_color}88; min-height: 20px; border-radius: 5px; }}

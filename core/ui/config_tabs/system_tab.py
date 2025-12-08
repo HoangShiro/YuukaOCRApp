@@ -31,7 +31,7 @@ def populate_provider_combo(combo: QComboBox, recent_providers: list = None, pro
     # Helper function to get display name with key icon
     def get_display_name(provider_id: str, name: str) -> str:
         if provider_id in providers_with_keys:
-            return f"{name} 🔑"
+            return f"{name} 🔑✅"
         return name
     
     # Add recent providers first (up to 5)
@@ -80,7 +80,7 @@ def populate_model_combo(combo: QComboBox, models: list, recent_models: list = N
     # Add recent models first (up to 5)
     for model in recent_models[:5]:
         if model in models and model not in added_models:
-            combo.addItem(f"⏱ {model}", model)
+            combo.addItem(model, model)
             added_models.add(model)
     
     # Add separator if we have recent models
