@@ -84,13 +84,51 @@ class GeminiOCRPlugin(QObject):
         os.makedirs(user_dir, exist_ok=True)
         load_dotenv(dotenv_path=env_filepath)
         
-        # Try to get API key from environment
-        api_key = os.getenv('API_KEY') or os.getenv('GOOGLE_API_KEY')
+        # Load API key for current provider
+        api_key = self._load_api_key_for_provider(self.current_provider)
         if not api_key:
             self.apiKeyNeeded.emit()
             return
         
         self._verify_api_key_and_configure(api_key)
+
+    def _get_provider_env_key(self, provider: str) -> str:
+        """Get the environment variable name for a provider's API key"""
+        provider_env_map = {
+            'gemini': 'GEMINI_API_KEY',
+            'openrouter': 'OPENROUTER_API_KEY',
+            'groq': 'GROQ_API_KEY',
+            'github': 'GITHUB_API_KEY',
+            'cerebras': 'CEREBRAS_API_KEY',
+            'mistral': 'MISTRAL_API_KEY',
+            'cohere': 'COHERE_API_KEY',
+            'cloudflare': 'CLOUDFLARE_API_KEY',
+            'nvidia_nim': 'NVIDIA_API_KEY',
+            'sambanova': 'SAMBANOVA_API_KEY',
+            'huggingface': 'HUGGINGFACE_API_KEY',
+            'fireworks': 'FIREWORKS_API_KEY',
+            'together': 'TOGETHER_API_KEY',
+            'nebius': 'NEBIUS_API_KEY',
+            'novita': 'NOVITA_API_KEY',
+            'hyperbolic': 'HYPERBOLIC_API_KEY',
+            'scaleway': 'SCALEWAY_API_KEY',
+            'custom': 'CUSTOM_API_KEY',
+        }
+        return provider_env_map.get(provider, f'{provider.upper()}_API_KEY')
+
+    def _load_api_key_for_provider(self, provider: str) -> str:
+        """Load API key for a specific provider from .env"""
+        env_key = self._get_provider_env_key(provider)
+        api_key = os.getenv(env_key)
+        
+        # Fallback to legacy keys for backward compatibility
+        if not api_key:
+            if provider == 'gemini':
+                api_key = os.getenv('GOOGLE_API_KEY') or os.getenv('API_KEY')
+            else:
+                api_key = os.getenv('API_KEY')
+        
+        return api_key or ''
 
     def _verify_api_key_and_configure(self, key):
         """Verify API key and configure the appropriate service"""
@@ -169,15 +207,36 @@ class GeminiOCRPlugin(QObject):
             self.apiKeyFailed.emit(key)
 
     def _save_api_key(self, key):
-        """Save API key to .env file"""
+        """Save API key for current provider to .env file (preserves other keys)"""
         user_dir = os.path.dirname(self.user_config_path)
         env_filepath = os.path.join(user_dir, '.env')
         os.makedirs(user_dir, exist_ok=True)
+        
+        # Read existing keys
+        existing_keys = {}
+        if os.path.exists(env_filepath):
+            try:
+                with open(env_filepath, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if '=' in line and not line.startswith('#'):
+                            k, v = line.split('=', 1)
+                            existing_keys[k.strip()] = v.strip()
+            except Exception:
+                pass
+        
+        # Update key for current provider
+        env_key = self._get_provider_env_key(self.current_provider)
+        existing_keys[env_key] = key
+        
+        # Also keep GOOGLE_API_KEY for backward compatibility with Gemini
+        if self._is_gemini_provider():
+            existing_keys['GOOGLE_API_KEY'] = key
+        
+        # Write all keys back
         with open(env_filepath, 'w') as f:
-            f.write(f'API_KEY={key}\n')
-            # Also keep GOOGLE_API_KEY for backward compatibility
-            if self._is_gemini_provider():
-                f.write(f'GOOGLE_API_KEY={key}\n')
+            for k, v in existing_keys.items():
+                f.write(f'{k}={v}\n')
 
     def _update_model(self):
         """Update the current model (for Gemini provider only)"""
@@ -462,9 +521,12 @@ class GeminiOCRPlugin(QObject):
         if old_provider != new_provider:
             self.logger.console_log(f"Provider được đổi từ '{old_provider}' thành '{new_provider}'.")
             self.current_provider = new_provider
-            # Reset model state - need to re-verify API key
+            # Reset model state
             self.model = None
             self.api_key = None
+            
+            # Auto-load saved API key for the new provider
+            self._auto_load_provider_key(new_provider)
         elif old_model != new_model:
             self.logger.console_log(f"Model được đổi từ '{old_model}' thành '{new_model}'.")
             
@@ -477,3 +539,20 @@ class GeminiOCRPlugin(QObject):
                 self.openai_service.set_provider(self.current_provider, self.api_key, custom_base_url)
         elif self.api_key:
             self._update_model()
+
+    def _auto_load_provider_key(self, provider: str):
+        """Auto-load and verify saved API key when switching providers"""
+        # Reload .env to get latest keys
+        user_dir = os.path.dirname(self.user_config_path)
+        env_filepath = os.path.join(user_dir, '.env')
+        if os.path.exists(env_filepath):
+            load_dotenv(dotenv_path=env_filepath, override=True)
+        
+        api_key = self._load_api_key_for_provider(provider)
+        if api_key:
+            self.logger.console_log(f"Đang tải API key đã lưu cho {provider}...")
+            threading.Thread(target=self._verify_api_key_and_configure, args=(api_key,), daemon=True).start()
+        else:
+            provider_name = PROVIDERS.get(provider, {}).get('name', provider)
+            self.logger.console_log(f"Chưa có API key cho {provider_name}. Vui lòng nhập API key.")
+            self.apiKeyNeeded.emit()
