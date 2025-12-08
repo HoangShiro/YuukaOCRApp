@@ -3,6 +3,8 @@ from PySide6.QtWidgets import (QVBoxLayout, QWidget, QCheckBox, QLabel, QFrame,
                                QLineEdit, QPushButton, QHBoxLayout, QStackedWidget,
                                QComboBox, QGroupBox, QTextEdit, QScrollArea)
 
+from plugins.openai_compatible import get_provider_list, PROVIDERS
+
 def create_system_tab(self: QWidget) -> QWidget:
     """
     Tạo nội dung cho tab System trong cửa sổ Config.
@@ -58,9 +60,26 @@ def create_system_tab(self: QWidget) -> QWidget:
     self.custom_prompt_edit = QTextEdit()
     self.custom_prompt_edit.setPlaceholderText("Nhập prompt của bạn...")
     self.custom_prompt_edit.setFixedHeight(100)
-    self.api_key_label = QLabel("Gemini API Key:")
+    
+    # YUUKA UPDATE: Provider selector
+    self.provider_label = QLabel("Provider:")
+    self.provider_combo = QComboBox()
+    providers = get_provider_list()
+    for p in providers:
+        self.provider_combo.addItem(p["name"], p["id"])
+    self.provider_combo.setToolTip("Chọn nhà cung cấp API. Xem danh sách free providers tại:\nhttps://github.com/cheahjs/free-llm-api-resources")
+    
+    # Custom Base URL (chỉ hiện khi chọn Custom provider)
+    self.custom_base_url_label = QLabel("Custom Base URL:")
+    self.custom_base_url_edit = QLineEdit()
+    self.custom_base_url_edit.setPlaceholderText("https://api.example.com/v1")
+    self.custom_base_url_label.hide()
+    self.custom_base_url_edit.hide()
+    
+    # YUUKA UPDATE: Đổi tên từ "Gemini API Key" thành "API Key"
+    self.api_key_label = QLabel("API Key:")
     self.api_key_edit = QLineEdit()
-    self.api_key_edit.setPlaceholderText("Dán key (AIza...) vào đây")
+    self.api_key_edit.setPlaceholderText("Dán API key vào đây")
     self.api_key_edit.setEchoMode(QLineEdit.Password)
     self.api_key_status_label = QLabel("")
     self.api_key_save_button = QPushButton("Xác thực")
@@ -68,11 +87,19 @@ def create_system_tab(self: QWidget) -> QWidget:
     api_hbox = QHBoxLayout()
     api_hbox.addWidget(self.api_key_edit)
     api_hbox.addWidget(self.api_key_save_button)
-    self.gemini_model_label = QLabel("Model Gemini (mặc định: gemini-2.5-flash):")
+    
+    # YUUKA UPDATE: Đổi tên từ "Model Gemini" thành "Model list"
+    self.gemini_model_label = QLabel("Model list:")
     self.gemini_model_combo = QComboBox()
+    self.gemini_model_combo.setToolTip("Danh sách model sẽ được tự động lấy sau khi xác thực API key")
+    
     right_layout.addWidget(self.prompt_enabled_cb)
     right_layout.addWidget(self.custom_prompt_edit)
     right_layout.addWidget(self._create_line())
+    right_layout.addWidget(self.provider_label)
+    right_layout.addWidget(self.provider_combo)
+    right_layout.addWidget(self.custom_base_url_label)
+    right_layout.addWidget(self.custom_base_url_edit)
     right_layout.addWidget(self.api_key_label)
     right_layout.addLayout(api_hbox)
     right_layout.addWidget(self.api_key_status_label)

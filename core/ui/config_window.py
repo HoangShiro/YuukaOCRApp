@@ -103,6 +103,8 @@ class ConfigWindow(PhysicsMovableWidget):
         # YUUKA'S PERFECT FIX: Chỉ comment dòng này để không phát signal khi gõ prompt,
         # nhưng vẫn giữ các signal khác để có "Live Config".
         # self.custom_prompt_edit.textChanged.connect(self._emit_changes)
+        self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        self.custom_base_url_edit.editingFinished.connect(self._emit_changes)
         self.gemini_model_combo.currentIndexChanged.connect(self._emit_changes); self.font_family_combo.currentFontChanged.connect(self._emit_changes)
         self.font_size_spinbox.valueChanged.connect(self._emit_changes); self.update_button.clicked.connect(self._on_update_button_clicked)
         self.api_key_save_button.clicked.connect(self._submit_api_key)
@@ -227,7 +229,8 @@ class ConfigWindow(PhysicsMovableWidget):
             'prompt_enabled': self.prompt_enabled_cb.isChecked(), 'custom_prompt': self.custom_prompt_edit.toPlainText().strip(), 
             'theme': theme_data, 'sub_window_position': self.current_pos_mode, 'sub_window_spacing': self.spacing_slider.value(), 
             'min_sub_win_width': self.min_sub_win_width_slider.value(), 'ui_scale': self.ui_scale_slider.value(), 
-            'hook_ocr_hotkey': hotkey_text, 'gemini_model': self.gemini_model_combo.currentText()
+            'hook_ocr_hotkey': hotkey_text, 'gemini_model': self.gemini_model_combo.currentText(),
+            'api_provider': self.provider_combo.currentData(), 'custom_base_url': self.custom_base_url_edit.text().strip()
         }
         close_color = QColor(self.theme_close_button_preview.text());
         if close_color.isValid(): config_data['close_button_color'] = list(close_color.getRgb()[:3])
@@ -238,6 +241,23 @@ class ConfigWindow(PhysicsMovableWidget):
     def _submit_api_key(self):
         key = self.api_key_edit.text().strip()
         if key: self.api_key_status_label.setText("Đang xác thực..."); self.api_key_status_label.setStyleSheet("color: #ccc;"); self.apiKeySubmitted.emit(key)
+
+    def _on_provider_changed(self, index):
+        """Handle provider selection change - show/hide custom base URL field"""
+        provider_id = self.provider_combo.currentData()
+        is_custom = provider_id == "custom"
+        self.custom_base_url_label.setVisible(is_custom)
+        self.custom_base_url_edit.setVisible(is_custom)
+        # Clear model list when provider changes
+        self.gemini_model_combo.blockSignals(True)
+        self.gemini_model_combo.clear()
+        self.gemini_model_combo.addItem("Vui lòng xác thực API key")
+        self.gemini_model_combo.setEnabled(False)
+        self.gemini_model_combo.blockSignals(False)
+        # Update status label
+        self.api_key_status_label.setText("Đổi provider - cần xác thực lại API key.")
+        self.api_key_status_label.setStyleSheet("color: #ffcc77;")
+        self._emit_changes()
 
     def _pick_color(self, color_type, show_alpha=False):
         if self.color_picker_dialog and self.color_picker_dialog.isVisible():
@@ -275,6 +295,14 @@ class ConfigWindow(PhysicsMovableWidget):
         self.snipping_clipboard_cb.setChecked(config_data.get('process_snipping_clipboard', True))
         self.prompt_enabled_cb.setChecked(config_data.get('prompt_enabled', False))
         self.custom_prompt_edit.setText(config_data.get('custom_prompt', ''))
+        # YUUKA UPDATE: Load provider and custom base URL
+        provider_id = config_data.get('api_provider', 'gemini')
+        provider_index = self.provider_combo.findData(provider_id)
+        if provider_index >= 0: self.provider_combo.setCurrentIndex(provider_index)
+        is_custom = provider_id == "custom"
+        self.custom_base_url_label.setVisible(is_custom)
+        self.custom_base_url_edit.setVisible(is_custom)
+        self.custom_base_url_edit.setText(config_data.get('custom_base_url', ''))
         theme_config = config_data.get('theme', {}); self.theme_accent_preview.setText(theme_config.get('accent_color', '#E98973')); self.theme_bg_preview.setText(theme_config.get('sub_win_bg', 'rgba(30,30,30,245)')); self.theme_text_preview.setText(theme_config.get('sub_win_text', '#FFFFFF'))
         font = QFont(); font.setFamily(theme_config.get('sub_win_font_family', 'Segoe UI')); self.font_family_combo.setCurrentFont(font); self.font_size_spinbox.setValue(theme_config.get('sub_win_font_size', 10))
         self.current_pos_mode = config_data.get('sub_window_position', 'auto'); self.pos_button_group.button(({'up':0, 'down':1, 'left':2, 'right':3, 'auto':4}).get(self.current_pos_mode, 4)).setChecked(True)

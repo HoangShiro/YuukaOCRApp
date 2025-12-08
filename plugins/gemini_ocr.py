@@ -1,4 +1,7 @@
 # plugins/gemini_ocr.py
+"""
+OCR Plugin - supports both Gemini (native) and OpenAI-compatible APIs
+"""
 import os
 import json
 import threading
@@ -18,6 +21,8 @@ except ImportError:
 
 from PySide6.QtCore import QTimer, QObject, Signal, QRect
 from core.logging import Logger
+from plugins.openai_compatible import OpenAICompatibleService, PROVIDERS, detect_provider_from_key
+
 
 class GeminiOCRPlugin(QObject):
     updateStatus = Signal(str, int)
@@ -38,8 +43,15 @@ class GeminiOCRPlugin(QObject):
         self.user_config = {}
         self._load_user_config()
 
+        # Gemini native model
         self.model = None
         self.api_key = None
+        
+        # OpenAI compatible service
+        self.openai_service = OpenAICompatibleService()
+        self.current_provider = self._get_user_config_value('api_provider', 'gemini')
+        self.current_model_name = self._get_user_config_value('gemini_model', 'gemini-2.5-flash')
+        
         self.last_clipboard_content = None
         self.just_copied_by_yuuka = False
         
@@ -47,7 +59,7 @@ class GeminiOCRPlugin(QObject):
         self.clipboard_timer.timeout.connect(self._check_clipboard_content)
         self.clipboard_timer.start(1000)
         
-        threading.Thread(target=self._initial_gemini_setup, daemon=True).start()
+        threading.Thread(target=self._initial_api_setup, daemon=True).start()
 
     def _load_user_config(self):
         try:
@@ -61,31 +73,51 @@ class GeminiOCRPlugin(QObject):
     def _get_user_config_value(self, key, default=None):
         return self.user_config.get(key, default)
 
-    def _initial_gemini_setup(self):
+    def _is_gemini_provider(self):
+        """Check if current provider is Gemini (uses native SDK)"""
+        return self.current_provider == 'gemini'
+
+    def _initial_api_setup(self):
+        """Initial setup - load API key from .env and verify"""
         user_dir = os.path.dirname(self.user_config_path)
         env_filepath = os.path.join(user_dir, '.env')
         os.makedirs(user_dir, exist_ok=True)
         load_dotenv(dotenv_path=env_filepath)
-        api_key = os.getenv('GOOGLE_API_KEY')
-        if not api_key: self.apiKeyNeeded.emit(); return
+        
+        # Try to get API key from environment
+        api_key = os.getenv('API_KEY') or os.getenv('GOOGLE_API_KEY')
+        if not api_key:
+            self.apiKeyNeeded.emit()
+            return
+        
         self._verify_api_key_and_configure(api_key)
 
     def _verify_api_key_and_configure(self, key):
+        """Verify API key and configure the appropriate service"""
+        provider = self._get_user_config_value('api_provider', 'gemini')
+        self.current_provider = provider
+        
+        if self._is_gemini_provider():
+            self._verify_gemini_key(key)
+        else:
+            self._verify_openai_compatible_key(key)
+
+    def _verify_gemini_key(self, key):
+        """Verify Gemini API key using native SDK"""
         try:
             temp_genai = genai
             temp_genai.configure(api_key=key)
             
             models_list = []
             for m in temp_genai.list_models():
-                if 'generateContent' in m.supported_generation_methods and any(name in m.name for name in ['flash', 'pro']):
+                if 'generateContent' in m.supported_generation_methods and any(name in m.name for name in ['flash', 'pro', 'gemma']):
                     models_list.append(m.name.replace('models/', ''))
             
             if not models_list:
-                raise ValueError("Không tìm thấy model 'flash' hoặc 'pro' nào khả dụng.")
+                raise ValueError("Không tìm thấy model Gemini nào khả dụng.")
 
-            user_dir = os.path.dirname(self.user_config_path); env_filepath = os.path.join(user_dir, '.env')
-            os.makedirs(user_dir, exist_ok=True)
-            with open(env_filepath, 'w') as f: f.write(f'GOOGLE_API_KEY={key}\n')
+            # Save API key to .env
+            self._save_api_key(key)
             
             self.api_key = key
             self._update_model()
@@ -93,18 +125,68 @@ class GeminiOCRPlugin(QObject):
             self.apiKeyVerified.emit(key, sorted(models_list, reverse=True))
 
         except (google_exceptions.PermissionDenied, google_exceptions.Unauthenticated, ValueError) as e:
-            error_msg = f"Lỗi cấu hình Gemini! Key có thể không hợp lệ. Lỗi: {e}"
+            error_msg = f"Lỗi Gemini API! Key có thể không hợp lệ. Lỗi: {e}"
             self.logger.console_log(error_msg)
-            self.api_key = None; self.model = None; self.apiKeyFailed.emit(key)
+            self.api_key = None
+            self.model = None
+            self.apiKeyFailed.emit(key)
         except Exception as e:
             error_msg = f"Lỗi không xác định khi cấu hình Gemini. Lỗi: {e}"
             self.logger.console_log(error_msg)
-            self.api_key = None; self.model = None; self.apiKeyFailed.emit(key)
+            self.api_key = None
+            self.model = None
+            self.apiKeyFailed.emit(key)
+
+    def _verify_openai_compatible_key(self, key):
+        """Verify OpenAI-compatible API key"""
+        try:
+            custom_base_url = self._get_user_config_value('custom_base_url', '')
+            self.openai_service.set_provider(self.current_provider, key, custom_base_url)
+            
+            provider_name = PROVIDERS.get(self.current_provider, {}).get('name', self.current_provider)
+            self.logger.console_log(f"Đang xác thực API key cho {provider_name}...")
+            
+            success, message, models_list = self.openai_service.verify_api_key()
+            
+            if success:
+                self._save_api_key(key)
+                self.api_key = key
+                self.model = True  # Mark as ready (not using Gemini model object)
+                self.logger.console_log(f"Đã kết nối với {provider_name} thành công! Có {len(models_list)} models.")
+                self.apiKeyVerified.emit(key, models_list[:50])  # Limit to 50 models for UI
+            else:
+                self.logger.console_log(f"Lỗi xác thực {provider_name}: {message}")
+                self.api_key = None
+                self.model = None
+                self.apiKeyFailed.emit(key)
+                
+        except Exception as e:
+            error_msg = f"Lỗi không xác định khi xác thực API: {e}"
+            self.logger.console_log(error_msg)
+            self.api_key = None
+            self.model = None
+            self.apiKeyFailed.emit(key)
+
+    def _save_api_key(self, key):
+        """Save API key to .env file"""
+        user_dir = os.path.dirname(self.user_config_path)
+        env_filepath = os.path.join(user_dir, '.env')
+        os.makedirs(user_dir, exist_ok=True)
+        with open(env_filepath, 'w') as f:
+            f.write(f'API_KEY={key}\n')
+            # Also keep GOOGLE_API_KEY for backward compatibility
+            if self._is_gemini_provider():
+                f.write(f'GOOGLE_API_KEY={key}\n')
 
     def _update_model(self):
+        """Update the current model (for Gemini provider only)"""
+        if not self._is_gemini_provider():
+            return
+            
         model_name = self._get_user_config_value('gemini_model', 'gemini-2.5-flash')
+        self.current_model_name = model_name
         try:
-            if self.model is None or self.model.model_name != f"models/{model_name}":
+            if self.model is None or (hasattr(self.model, 'model_name') and self.model.model_name != f"models/{model_name}"):
                 self.logger.console_log(f"Đang sử dụng model '{model_name}'")
                 self.model = genai.GenerativeModel(model_name, generation_config={"response_mime_type": "application/json"})
         except Exception as e:
@@ -118,10 +200,16 @@ class GeminiOCRPlugin(QObject):
     def _check_clipboard_content(self):
         if self.just_copied_by_yuuka: self.just_copied_by_yuuka = False; return
         if not self.model:
+            # Auto-detect API key from clipboard for any provider
             try:
                 cb_text = pyperclip.paste()
-                if cb_text and cb_text.strip().startswith('AIza') and self._is_new_content(cb_text.strip()):
-                    self.last_clipboard_content = cb_text.strip(); self.handle_api_key_attempt(self.last_clipboard_content)
+                if cb_text and cb_text.strip() and self._is_new_content(cb_text.strip()):
+                    key = cb_text.strip()
+                    # Check if it looks like an API key
+                    detected_provider = detect_provider_from_key(key)
+                    if detected_provider or (len(key) > 20 and key.isalnum() or key.startswith('sk-')):
+                        self.last_clipboard_content = key
+                        self.handle_api_key_attempt(key)
             except Exception: pass
             return
         
@@ -181,10 +269,11 @@ class GeminiOCRPlugin(QObject):
                 return f"{base_prompt}\n\nAdditionally, strictly follow this user instruction: {custom_prompt}"
         return base_prompt
 
-    def process_and_copy_result(self, response, model_name):
+    def process_and_copy_result(self, response_text, model_name):
+        """Process response text and copy to clipboard - unified for both APIs"""
         data = None
         try:
-            clean_text = response.text.strip()
+            clean_text = response_text.strip()
             if clean_text.startswith("```json"): clean_text = clean_text[7:-3].strip()
             elif clean_text.startswith("```"): clean_text = clean_text[3:-3].strip()
             
@@ -222,12 +311,11 @@ class GeminiOCRPlugin(QObject):
             self.updateStatus.emit("Yuuka: Ctrl + v đi!", 3000)
             
         except Exception as e:
-            failed_text = response.text if hasattr(response, 'text') else str(response)
-            error_msg = f"Lỗi JSON hoặc xử lý. Response: {failed_text}. Lỗi: {e}"
+            error_msg = f"Lỗi JSON hoặc xử lý. Response: {response_text[:200]}. Lỗi: {e}"
             self.logger.log_api_call(model_name, success=False, error_message=error_msg)
             # YUUKA FIX: Vẫn lưu output lỗi vào log để debug
             if data: self.logger.add_recent_output(data) 
-            else: self.logger.add_recent_output({"error": "Failed to parse JSON", "raw_response": failed_text})
+            else: self.logger.add_recent_output({"error": "Failed to parse JSON", "raw_response": response_text[:500]})
             self.updateStatus.emit("Yuuka: Lỗi response...", 3000)
         finally: 
             self.processingComplete.emit()
@@ -243,34 +331,99 @@ class GeminiOCRPlugin(QObject):
                 return
             target_func(*args)
         except Exception as e:
+            model_name = self.current_model_name
             error_msg = f"Lỗi trong thread {target_func.__name__}: {e}"
-            self.logger.log_api_call(self.model.model_name, success=False, error_message=error_msg)
+            self.logger.log_api_call(model_name, success=False, error_message=error_msg)
             self.updateStatus.emit(f"Yuuka: Lỗi! {str(e)[:40]}...", 3000)
             self.processingComplete.emit()
 
     def process_image_in_thread(self, img):
+        """Process image - supports both Gemini and OpenAI-compatible APIs"""
         if img.mode == 'RGBA': img = img.convert('RGB')
         prompt = self._get_combined_prompt('Extract all text from this image. Respond in a strict JSON format like this: {"extracted_text": "all the text you found"}.')
-        response = self.model.generate_content([prompt, img]); self.process_and_copy_result(response, self.model.model_name)
+        
+        if self._is_gemini_provider():
+            response = self.model.generate_content([prompt, img])
+            self.process_and_copy_result(response.text, self.model.model_name)
+        else:
+            result = self.openai_service.generate_content(prompt, image=img, model=self.current_model_name)
+            if result["success"]:
+                self.process_and_copy_result(result["text"], self.current_model_name)
+            else:
+                self.logger.log_api_call(self.current_model_name, success=False, error_message=result["error"])
+                self.updateStatus.emit(f"Yuuka: {result['error'][:40]}...", 3000)
+                self.processingComplete.emit()
 
     def process_file_in_thread(self, filepath):
+        """Process file - supports both Gemini and OpenAI-compatible APIs"""
         self.updateStatus.emit("Yuuka: Uploading file...", 0)
-        uploaded_file = genai.upload_file(path=filepath)
-        self.updateStatus.emit("Yuuka: Đợi chút nha...", 0)
         prompt = self._get_combined_prompt('Analyze this file and extract all text from it. Respond in a strict JSON format like this: {"extracted_text": "all the text you found"}.')
-        response = self.model.generate_content([prompt, uploaded_file]); self.process_and_copy_result(response, self.model.model_name)
+        
+        if self._is_gemini_provider():
+            uploaded_file = genai.upload_file(path=filepath)
+            self.updateStatus.emit("Yuuka: Đợi chút nha...", 0)
+            response = self.model.generate_content([prompt, uploaded_file])
+            self.process_and_copy_result(response.text, self.model.model_name)
+        else:
+            # For OpenAI-compatible APIs, check if file is an image
+            _, ext = os.path.splitext(filepath)
+            image_exts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']
+            
+            if ext.lower() in image_exts:
+                result = self.openai_service.generate_content(prompt, image_path=filepath, model=self.current_model_name)
+            else:
+                # For non-image files, read text content (not all providers support file uploads)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        file_content = f.read()
+                    full_prompt = f"{prompt}\n\nFile content:\n{file_content}"
+                    result = self.openai_service.generate_content(full_prompt, model=self.current_model_name)
+                except:
+                    result = {"success": False, "text": "", "error": "Không thể đọc file hoặc provider không hỗ trợ."}
+            
+            if result["success"]:
+                self.process_and_copy_result(result["text"], self.current_model_name)
+            else:
+                self.logger.log_api_call(self.current_model_name, success=False, error_message=result["error"])
+                self.updateStatus.emit(f"Yuuka: {result['error'][:40]}...", 3000)
+                self.processingComplete.emit()
 
     def process_text_in_thread(self, text_content):
+        """Process text - supports both Gemini and OpenAI-compatible APIs"""
         prompt = self._get_combined_prompt('Process the following text. If a user instruction is provided, follow it. Otherwise, summarize the text. Respond in a strict JSON format like this: {"extracted_text": "your complete response here"}.')
-        response = self.model.generate_content([prompt, text_content]); self.process_and_copy_result(response, self.model.model_name)
+        full_prompt = f"{prompt}\n\nText:\n{text_content}"
+        
+        if self._is_gemini_provider():
+            response = self.model.generate_content(full_prompt)
+            self.process_and_copy_result(response.text, self.model.model_name)
+        else:
+            result = self.openai_service.generate_content(full_prompt, model=self.current_model_name)
+            if result["success"]:
+                self.process_and_copy_result(result["text"], self.current_model_name)
+            else:
+                self.logger.log_api_call(self.current_model_name, success=False, error_message=result["error"])
+                self.updateStatus.emit(f"Yuuka: {result['error'][:40]}...", 3000)
+                self.processingComplete.emit()
 
     def process_hooked_region_in_thread(self, physical_roi_rect):
+        """Process hooked region - supports both Gemini and OpenAI-compatible APIs"""
         self.logger.log_source("hooked_ocr")
         bbox = (physical_roi_rect.x(), physical_roi_rect.y(), physical_roi_rect.right() + 1, physical_roi_rect.bottom() + 1)
         img = ImageGrab.grab(bbox=bbox, all_screens=True)
         if img.mode == 'RGBA': img = img.convert('RGB')
         prompt = self._get_combined_prompt('Extract all text from this image. Respond in a strict JSON format like this: {"extracted_text": "all the text you found"}.')
-        response = self.model.generate_content([prompt, img]); self.process_and_copy_result(response, self.model.model_name)
+        
+        if self._is_gemini_provider():
+            response = self.model.generate_content([prompt, img])
+            self.process_and_copy_result(response.text, self.model.model_name)
+        else:
+            result = self.openai_service.generate_content(prompt, image=img, model=self.current_model_name)
+            if result["success"]:
+                self.process_and_copy_result(result["text"], self.current_model_name)
+            else:
+                self.logger.log_api_call(self.current_model_name, success=False, error_message=result["error"])
+                self.updateStatus.emit(f"Yuuka: {result['error'][:40]}...", 3000)
+                self.processingComplete.emit()
 
     def handle_hooked_ocr_request(self, physical_roi_rect):
         threading.Thread(target=self._process_with_error_handling, args=(self.process_hooked_region_in_thread, physical_roi_rect), daemon=True).start()
@@ -283,11 +436,30 @@ class GeminiOCRPlugin(QObject):
             self.processingComplete.emit()
 
     def handle_user_config_changed(self, new_config):
+        old_provider = self.user_config.get('api_provider', 'gemini')
+        new_provider = new_config.get('api_provider', 'gemini')
         old_model = self.user_config.get('gemini_model')
         new_model = new_config.get('gemini_model')
-        if old_model != new_model:
-            self.logger.console_log(f"Model Gemini được đổi từ '{old_model}' thành '{new_model}'.")
+        
+        # Update current model name
+        self.current_model_name = new_model or self.current_model_name
+        
+        # Check if provider changed
+        if old_provider != new_provider:
+            self.logger.console_log(f"Provider được đổi từ '{old_provider}' thành '{new_provider}'.")
+            self.current_provider = new_provider
+            # Reset model state - need to re-verify API key
+            self.model = None
+            self.api_key = None
+        elif old_model != new_model:
+            self.logger.console_log(f"Model được đổi từ '{old_model}' thành '{new_model}'.")
             
         self.user_config = new_config
-        if self.api_key:
+        
+        # Update OpenAI service with new settings
+        if not self._is_gemini_provider():
+            custom_base_url = new_config.get('custom_base_url', '')
+            if self.api_key:
+                self.openai_service.set_provider(self.current_provider, self.api_key, custom_base_url)
+        elif self.api_key:
             self._update_model()
