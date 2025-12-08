@@ -250,8 +250,9 @@ class ConfigWindow(PhysicsMovableWidget):
         is_custom = provider_id == "custom"
         self.custom_base_url_label.setVisible(is_custom)
         self.custom_base_url_edit.setVisible(is_custom)
-        # Clear API key input when provider changes
+        # Clear API key input and reset label when provider changes
         self.api_key_edit.clear()
+        self.api_key_label.setText("API Key:")
         # Clear model list when provider changes
         self.gemini_model_combo.blockSignals(True)
         self.gemini_model_combo.clear()
@@ -364,12 +365,22 @@ class ConfigWindow(PhysicsMovableWidget):
 
     def update_api_key_status(self, key, is_verified, models=[]):
         self.gemini_model_combo.blockSignals(True); self.gemini_model_combo.clear()
+        # Always keep the input field empty
+        self.api_key_edit.clear()
         if is_verified:
-            self.api_key_edit.setText(key); self.api_key_status_label.setText("Key hợp lệ và đã được lưu."); self.api_key_status_label.setStyleSheet("color: #77cc77;")
+            # Show masked key in label: "API Key: *****aNL" (last 3 chars visible)
+            masked_key = f"*****{key[-3:]}" if len(key) >= 3 else "*****"
+            self.api_key_label.setText(f"API Key: {masked_key}")
+            self.api_key_status_label.setText("Key hợp lệ và đã được lưu."); self.api_key_status_label.setStyleSheet("color: #77cc77;")
             if models: self.gemini_model_combo.addItems(models); self.gemini_model_combo.setEnabled(True)
             else: self.gemini_model_combo.addItem("Không tìm thấy model"); self.gemini_model_combo.setEnabled(False)
-        elif key: self.api_key_edit.setText(key); self.api_key_status_label.setText("Key không hợp lệ hoặc đã hết hạn."); self.api_key_status_label.setStyleSheet("color: #ff7777;"); self.gemini_model_combo.setEnabled(False)
-        else: self.api_key_edit.clear(); self.api_key_status_label.setText("Chưa có API key."); self.api_key_status_label.setStyleSheet("color: #aaa;"); self.gemini_model_combo.setEnabled(False)
+        elif key:
+            masked_key = f"*****{key[-3:]}" if len(key) >= 3 else "*****"
+            self.api_key_label.setText(f"API Key: {masked_key}")
+            self.api_key_status_label.setText("Key không hợp lệ hoặc đã hết hạn."); self.api_key_status_label.setStyleSheet("color: #ff7777;"); self.gemini_model_combo.setEnabled(False)
+        else:
+            self.api_key_label.setText("API Key:")
+            self.api_key_status_label.setText("Chưa có API key."); self.api_key_status_label.setStyleSheet("color: #aaa;"); self.gemini_model_combo.setEnabled(False)
         self.gemini_model_combo.blockSignals(False)
         
     def _on_pos_button_clicked(self, button): self.current_pos_mode = (['up', 'down', 'left', 'right', 'auto'])[self.pos_button_group.id(button)]; self._emit_changes()
