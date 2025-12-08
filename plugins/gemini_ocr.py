@@ -350,8 +350,12 @@ class GeminiOCRPlugin(QObject):
             if result["success"]:
                 self.process_and_copy_result(result["text"], self.current_model_name)
             else:
-                self.logger.log_api_call(self.current_model_name, success=False, error_message=result["error"])
-                self.updateStatus.emit(f"Yuuka: {result['error'][:40]}...", 3000)
+                error_msg = result["error"]
+                self.logger.console_log(f"Lỗi API: {error_msg}")
+                self.logger.log_api_call(self.current_model_name, success=False, error_message=error_msg)
+                # Hiển thị lỗi đầy đủ hơn cho user
+                display_error = error_msg[:60] if len(error_msg) > 60 else error_msg
+                self.updateStatus.emit(f"Yuuka: {display_error}", 5000)
                 self.processingComplete.emit()
 
     def process_file_in_thread(self, filepath):
@@ -384,8 +388,11 @@ class GeminiOCRPlugin(QObject):
             if result["success"]:
                 self.process_and_copy_result(result["text"], self.current_model_name)
             else:
-                self.logger.log_api_call(self.current_model_name, success=False, error_message=result["error"])
-                self.updateStatus.emit(f"Yuuka: {result['error'][:40]}...", 3000)
+                error_msg = result["error"]
+                self.logger.console_log(f"Lỗi API: {error_msg}")
+                self.logger.log_api_call(self.current_model_name, success=False, error_message=error_msg)
+                display_error = error_msg[:60] if len(error_msg) > 60 else error_msg
+                self.updateStatus.emit(f"Yuuka: {display_error}", 5000)
                 self.processingComplete.emit()
 
     def process_text_in_thread(self, text_content):
@@ -401,8 +408,11 @@ class GeminiOCRPlugin(QObject):
             if result["success"]:
                 self.process_and_copy_result(result["text"], self.current_model_name)
             else:
-                self.logger.log_api_call(self.current_model_name, success=False, error_message=result["error"])
-                self.updateStatus.emit(f"Yuuka: {result['error'][:40]}...", 3000)
+                error_msg = result["error"]
+                self.logger.console_log(f"Lỗi API: {error_msg}")
+                self.logger.log_api_call(self.current_model_name, success=False, error_message=error_msg)
+                display_error = error_msg[:60] if len(error_msg) > 60 else error_msg
+                self.updateStatus.emit(f"Yuuka: {display_error}", 5000)
                 self.processingComplete.emit()
 
     def process_hooked_region_in_thread(self, physical_roi_rect):
@@ -421,8 +431,11 @@ class GeminiOCRPlugin(QObject):
             if result["success"]:
                 self.process_and_copy_result(result["text"], self.current_model_name)
             else:
-                self.logger.log_api_call(self.current_model_name, success=False, error_message=result["error"])
-                self.updateStatus.emit(f"Yuuka: {result['error'][:40]}...", 3000)
+                error_msg = result["error"]
+                self.logger.console_log(f"Lỗi API: {error_msg}")
+                self.logger.log_api_call(self.current_model_name, success=False, error_message=error_msg)
+                display_error = error_msg[:60] if len(error_msg) > 60 else error_msg
+                self.updateStatus.emit(f"Yuuka: {display_error}", 5000)
                 self.processingComplete.emit()
 
     def handle_hooked_ocr_request(self, physical_roi_rect):

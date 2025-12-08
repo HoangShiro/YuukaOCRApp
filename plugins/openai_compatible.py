@@ -281,8 +281,13 @@ class OpenAICompatibleService:
             "model": model,
             "messages": messages,
             "max_tokens": 4096,
-            "response_format": {"type": "json_object"}  # Request JSON response
         }
+        
+        # Only add response_format for non-vision requests or if provider supports it
+        # Some providers don't support JSON mode with vision
+        has_image = image is not None or (image_path and os.path.exists(image_path))
+        if not has_image:
+            payload["response_format"] = {"type": "json_object"}
         
         try:
             response = self._session.post(
@@ -293,8 +298,10 @@ class OpenAICompatibleService:
             )
             
             if response.status_code != 200:
-                error_text = response.text[:200] if response.text else f"Status {response.status_code}"
-                return {"success": False, "text": "", "error": f"API Error: {error_text}"}
+                error_text = response.text[:300] if response.text else f"Status {response.status_code}"
+                # Parse error message for better user feedback
+                user_error = self._parse_error_message(error_text, model)
+                return {"success": False, "text": "", "error": user_error}
             
             data = response.json()
             
@@ -310,6 +317,33 @@ class OpenAICompatibleService:
             return {"success": False, "text": "", "error": "Timeout khi gọi API."}
         except Exception as e:
             return {"success": False, "text": "", "error": f"Lỗi: {str(e)[:100]}"}
+
+    def _parse_error_message(self, error_text: str, model: str) -> str:
+        """Parse API error and return user-friendly message"""
+        error_lower = error_text.lower()
+        
+        # Check for vision not supported error
+        if "image input is not enabled" in error_lower or "vision" in error_lower and "not supported" in error_lower:
+            return f"Model '{model}' không hỗ trợ xử lý ảnh! Hãy chọn model có hỗ trợ vision (ví dụ: pixtral, llava, gpt-4o, claude-3)."
+        
+        # Check for model not found
+        if "model not found" in error_lower or "does not exist" in error_lower:
+            return f"Model '{model}' không tồn tại hoặc không khả dụng."
+        
+        # Check for rate limit
+        if "rate limit" in error_lower or "too many requests" in error_lower:
+            return "Đã vượt quá giới hạn request. Vui lòng đợi một chút."
+        
+        # Check for invalid API key
+        if "unauthorized" in error_lower or "invalid api key" in error_lower:
+            return "API key không hợp lệ hoặc đã hết hạn."
+        
+        # Check for content too large
+        if "too large" in error_lower or "maximum" in error_lower and "token" in error_lower:
+            return "Nội dung quá lớn, vui lòng thử với ảnh nhỏ hơn."
+        
+        # Default: return truncated error
+        return f"API Error: {error_text[:150]}"
 
 
 def get_provider_list() -> List[Dict[str, str]]:
