@@ -52,6 +52,9 @@ class GeminiOCRPlugin(QObject):
         self.current_provider = self._get_user_config_value('api_provider', 'gemini')
         self.current_model_name = self._get_user_config_value('gemini_model', 'gemini-2.5-flash')
         
+        # Track which provider is currently being verified to prevent race conditions
+        self._verifying_provider = None
+        
         self.last_clipboard_content = None
         self.just_copied_by_yuuka = False
         
@@ -121,20 +124,18 @@ class GeminiOCRPlugin(QObject):
         env_key = self._get_provider_env_key(provider)
         api_key = os.getenv(env_key)
         
-        # Fallback to legacy keys for backward compatibility
-        if not api_key:
-            if provider == 'gemini':
-                api_key = os.getenv('GOOGLE_API_KEY') or os.getenv('API_KEY')
-            else:
-                api_key = os.getenv('API_KEY')
+        # Fallback to legacy keys for backward compatibility (Gemini only)
+        if not api_key and provider == 'gemini':
+            api_key = os.getenv('GOOGLE_API_KEY') or os.getenv('API_KEY')
         
         return api_key or ''
 
     def _verify_api_key_and_configure(self, key):
         """Verify API key and configure the appropriate service"""
-        provider = self._get_user_config_value('api_provider', 'gemini')
-        self.current_provider = provider
+        # Track which provider we're verifying to prevent race conditions
+        self._verifying_provider = self.current_provider
         
+        # Use self.current_provider which is already updated
         if self._is_gemini_provider():
             self._verify_gemini_key(key)
         else:
@@ -142,6 +143,7 @@ class GeminiOCRPlugin(QObject):
 
     def _verify_gemini_key(self, key):
         """Verify Gemini API key using native SDK"""
+        verifying_for = self._verifying_provider
         try:
             temp_genai = genai
             temp_genai.configure(api_key=key)
@@ -154,6 +156,11 @@ class GeminiOCRPlugin(QObject):
             if not models_list:
                 raise ValueError("Không tìm thấy model Gemini nào khả dụng.")
 
+            # Check if provider has changed during verification
+            if verifying_for != self.current_provider:
+                self.logger.console_log(f"Bỏ qua kết quả verify cho {verifying_for} vì provider đã đổi thành {self.current_provider}")
+                return
+
             # Save API key to .env
             self._save_api_key(key)
             
@@ -163,12 +170,16 @@ class GeminiOCRPlugin(QObject):
             self.apiKeyVerified.emit(key, sorted(models_list, reverse=True))
 
         except (google_exceptions.PermissionDenied, google_exceptions.Unauthenticated, ValueError) as e:
+            if verifying_for != self.current_provider:
+                return
             error_msg = f"Lỗi Gemini API! Key có thể không hợp lệ. Lỗi: {e}"
             self.logger.console_log(error_msg)
             self.api_key = None
             self.model = None
             self.apiKeyFailed.emit(key)
         except Exception as e:
+            if verifying_for != self.current_provider:
+                return
             error_msg = f"Lỗi không xác định khi cấu hình Gemini. Lỗi: {e}"
             self.logger.console_log(error_msg)
             self.api_key = None
@@ -177,6 +188,7 @@ class GeminiOCRPlugin(QObject):
 
     def _verify_openai_compatible_key(self, key):
         """Verify OpenAI-compatible API key"""
+        verifying_for = self._verifying_provider
         try:
             custom_base_url = self._get_user_config_value('custom_base_url', '')
             self.openai_service.set_provider(self.current_provider, key, custom_base_url)
@@ -185,6 +197,11 @@ class GeminiOCRPlugin(QObject):
             self.logger.console_log(f"Đang xác thực API key cho {provider_name}...")
             
             success, message, models_list = self.openai_service.verify_api_key()
+            
+            # Check if provider has changed during verification
+            if verifying_for != self.current_provider:
+                self.logger.console_log(f"Bỏ qua kết quả verify cho {verifying_for} vì provider đã đổi thành {self.current_provider}")
+                return
             
             if success:
                 self._save_api_key(key)
@@ -200,6 +217,8 @@ class GeminiOCRPlugin(QObject):
                 self.apiKeyFailed.emit(key)
                 
         except Exception as e:
+            if verifying_for != self.current_provider:
+                return
             error_msg = f"Lỗi không xác định khi xác thực API: {e}"
             self.logger.console_log(error_msg)
             self.api_key = None
@@ -504,8 +523,12 @@ class GeminiOCRPlugin(QObject):
         old_model = self.user_config.get('gemini_model')
         new_model = new_config.get('gemini_model')
         
-        # Update current model name
-        self.current_model_name = new_model or self.current_model_name
+        # Update user_config FIRST before any other operations
+        self.user_config = new_config
+        
+        # Update current model name only if it's a valid model (not placeholder text)
+        if new_model and not new_model.startswith("Vui lòng") and not new_model.startswith("Không tìm"):
+            self.current_model_name = new_model
         
         # Check if provider changed
         if old_provider != new_provider:
@@ -517,18 +540,15 @@ class GeminiOCRPlugin(QObject):
             
             # Auto-load saved API key for the new provider
             self._auto_load_provider_key(new_provider)
-        elif old_model != new_model:
+        elif old_model != new_model and new_model and not new_model.startswith("Vui lòng"):
             self.logger.console_log(f"Model được đổi từ '{old_model}' thành '{new_model}'.")
-            
-        self.user_config = new_config
-        
-        # Update OpenAI service with new settings
-        if not self._is_gemini_provider():
-            custom_base_url = new_config.get('custom_base_url', '')
-            if self.api_key:
-                self.openai_service.set_provider(self.current_provider, self.api_key, custom_base_url)
-        elif self.api_key:
-            self._update_model()
+            # Update OpenAI service with new settings
+            if not self._is_gemini_provider():
+                custom_base_url = new_config.get('custom_base_url', '')
+                if self.api_key:
+                    self.openai_service.set_provider(self.current_provider, self.api_key, custom_base_url)
+            elif self.api_key:
+                self._update_model()
 
     def _auto_load_provider_key(self, provider: str):
         """Auto-load and verify saved API key when switching providers"""
