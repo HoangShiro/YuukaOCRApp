@@ -250,6 +250,8 @@ class ConfigWindow(PhysicsMovableWidget):
         is_custom = provider_id == "custom"
         self.custom_base_url_label.setVisible(is_custom)
         self.custom_base_url_edit.setVisible(is_custom)
+        # Clear API key input when provider changes
+        self.api_key_edit.clear()
         # Clear model list when provider changes
         self.gemini_model_combo.blockSignals(True)
         self.gemini_model_combo.clear()
