@@ -2,6 +2,8 @@
 from PySide6.QtWidgets import (QVBoxLayout, QWidget, QCheckBox, QLabel, QFrame,
                                QLineEdit, QPushButton, QHBoxLayout, QStackedWidget,
                                QComboBox, QGroupBox, QTextEdit, QScrollArea)
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QUrl, Qt
 
 from plugins.openai_compatible import get_provider_list, PROVIDERS
 
@@ -61,8 +63,19 @@ def create_system_tab(self: QWidget) -> QWidget:
     self.custom_prompt_edit.setPlaceholderText("Nhập prompt của bạn...")
     self.custom_prompt_edit.setFixedHeight(100)
     
-    # YUUKA UPDATE: Provider selector
+    # YUUKA UPDATE: Provider selector with link button
     self.provider_label = QLabel("Provider:")
+    self.provider_link_button = QPushButton("🔗")
+    self.provider_link_button.setObjectName("provider_link_button")
+    self.provider_link_button.setFixedSize(24, 24)
+    self.provider_link_button.setToolTip("Mở trang web của provider để lấy API key")
+    self.provider_link_button.setCursor(Qt.PointingHandCursor)
+    
+    provider_header_layout = QHBoxLayout()
+    provider_header_layout.addWidget(self.provider_label)
+    provider_header_layout.addWidget(self.provider_link_button)
+    provider_header_layout.addStretch()
+    
     self.provider_combo = QComboBox()
     providers = get_provider_list()
     for p in providers:
@@ -96,7 +109,7 @@ def create_system_tab(self: QWidget) -> QWidget:
     right_layout.addWidget(self.prompt_enabled_cb)
     right_layout.addWidget(self.custom_prompt_edit)
     right_layout.addWidget(self._create_line())
-    right_layout.addWidget(self.provider_label)
+    right_layout.addLayout(provider_header_layout)
     right_layout.addWidget(self.provider_combo)
     right_layout.addWidget(self.custom_base_url_label)
     right_layout.addWidget(self.custom_base_url_edit)

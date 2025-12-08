@@ -5,12 +5,13 @@ from PySide6.QtWidgets import (QWidget, QApplication, QCheckBox, QLabel, QFrame,
                                QLineEdit, QPushButton, QHBoxLayout,
                                QFontComboBox, QSpinBox, QSlider, QButtonGroup,
                                QFileDialog, QStackedWidget, QComboBox, QVBoxLayout, QTextEdit)
-from PySide6.QtGui import QColor, QFont, QDragEnterEvent, QMouseEvent, QKeyEvent, QPixmap, QHideEvent, QShowEvent, QTextCursor
-from PySide6.QtCore import Qt, Signal, QEvent, QTimer, QElapsedTimer, QPointF
+from PySide6.QtGui import QColor, QFont, QDragEnterEvent, QMouseEvent, QKeyEvent, QPixmap, QHideEvent, QShowEvent, QTextCursor, QDesktopServices
+from PySide6.QtCore import Qt, Signal, QEvent, QTimer, QElapsedTimer, QPointF, QUrl
 
 from core.physics import PhysicsMovableWidget
 from core import update
 from core.logging import Logger
+from plugins.openai_compatible import PROVIDERS
 
 from .themed_color_picker import ThemedColorDialog
 from .config_tabs.system_tab import create_system_tab
@@ -104,6 +105,7 @@ class ConfigWindow(PhysicsMovableWidget):
         # nhưng vẫn giữ các signal khác để có "Live Config".
         # self.custom_prompt_edit.textChanged.connect(self._emit_changes)
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        self.provider_link_button.clicked.connect(self._open_provider_website)
         self.custom_base_url_edit.editingFinished.connect(self._emit_changes)
         self.gemini_model_combo.currentIndexChanged.connect(self._emit_changes); self.font_family_combo.currentFontChanged.connect(self._emit_changes)
         self.font_size_spinbox.valueChanged.connect(self._emit_changes); self.update_button.clicked.connect(self._on_update_button_clicked)
@@ -258,6 +260,17 @@ class ConfigWindow(PhysicsMovableWidget):
         self.api_key_status_label.setText("Đổi provider - cần xác thực lại API key.")
         self.api_key_status_label.setStyleSheet("color: #ffcc77;")
         self._emit_changes()
+
+    def _open_provider_website(self):
+        """Open the current provider's documentation website"""
+        provider_id = self.provider_combo.currentData()
+        provider_config = PROVIDERS.get(provider_id, {})
+        docs_url = provider_config.get("docs_url", "")
+        if docs_url:
+            QDesktopServices.openUrl(QUrl(docs_url))
+        else:
+            # Fallback to free-llm-api-resources page
+            QDesktopServices.openUrl(QUrl("https://github.com/cheahjs/free-llm-api-resources"))
 
     def _pick_color(self, color_type, show_alpha=False):
         if self.color_picker_dialog and self.color_picker_dialog.isVisible():

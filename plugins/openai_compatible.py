@@ -241,7 +241,138 @@ class OpenAICompatibleService:
             data = base64.b64encode(f.read()).decode('utf-8')
         
         return data, mime_type
-    
+
+    def _generate_mistral_ocr(self, prompt: str, image: Optional[Image.Image] = None,
+                               image_path: Optional[str] = None, model: str = "") -> Dict[str, Any]:
+        """
+        Special handler for Mistral OCR models (mistral-ocr-*, pixtral-*)
+        These models use vision capabilities through chat/completions but with specific format
+        """
+        # For pixtral models, use standard vision format
+        if model.startswith("pixtral"):
+            return self._generate_pixtral(prompt, image, image_path, model)
+        
+        # For mistral-ocr models, they actually DON'T support direct image input via chat/completions
+        # They require the /v1/ocr endpoint with document upload
+        # However, for simplicity we'll try using pixtral for OCR tasks instead
+        # and show a helpful error message
+        
+        if not image and not image_path:
+            return {"success": False, "text": "", "error": "Mistral OCR cần ảnh để xử lý."}
+        
+        # Build image data
+        if image is not None:
+            base64_data = self._image_to_base64(image)
+            image_url = f"data:image/jpeg;base64,{base64_data}"
+        else:
+            base64_data, mime_type = self._file_to_base64(image_path)
+            image_url = f"data:{mime_type};base64,{base64_data}"
+        
+        # Mistral OCR models use a document-based approach
+        # Try using the chat completions with image_url format
+        messages = [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image_url}}
+            ]
+        }]
+        
+        payload = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": 4096
+        }
+        
+        try:
+            response = self._session.post(
+                f"{self.base_url}/chat/completions",
+                headers=self._get_headers(),
+                json=payload,
+                timeout=60
+            )
+            
+            if response.status_code != 200:
+                error_text = response.text[:300] if response.text else f"Status {response.status_code}"
+                # Check if it's an invalid model error - suggest alternatives
+                if "invalid_model" in error_text.lower() or "invalid model" in error_text.lower():
+                    return {
+                        "success": False, 
+                        "text": "", 
+                        "error": f"Model '{model}' không khả dụng qua API. Hãy thử 'pixtral-12b-latest' hoặc 'pixtral-large-latest' cho OCR."
+                    }
+                user_error = self._parse_error_message(error_text, model)
+                return {"success": False, "text": "", "error": user_error}
+            
+            data = response.json()
+            
+            if "choices" in data and len(data["choices"]) > 0:
+                message = data["choices"][0].get("message", {})
+                text = message.get("content", "")
+                return {"success": True, "text": text, "error": ""}
+            else:
+                return {"success": False, "text": "", "error": "Không có response từ API."}
+                
+        except requests.exceptions.Timeout:
+            return {"success": False, "text": "", "error": "Timeout khi gọi API."}
+        except Exception as e:
+            return {"success": False, "text": "", "error": f"Lỗi: {str(e)[:100]}"}
+
+    def _generate_pixtral(self, prompt: str, image: Optional[Image.Image] = None,
+                          image_path: Optional[str] = None, model: str = "") -> Dict[str, Any]:
+        """Handler for Pixtral vision models - uses standard OpenAI vision format"""
+        if not image and not image_path:
+            return {"success": False, "text": "", "error": "Pixtral cần ảnh để xử lý."}
+        
+        # Build image data
+        if image is not None:
+            base64_data = self._image_to_base64(image)
+            image_url = f"data:image/jpeg;base64,{base64_data}"
+        else:
+            base64_data, mime_type = self._file_to_base64(image_path)
+            image_url = f"data:{mime_type};base64,{base64_data}"
+        
+        messages = [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image_url}}
+            ]
+        }]
+        
+        payload = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": 4096
+        }
+        
+        try:
+            response = self._session.post(
+                f"{self.base_url}/chat/completions",
+                headers=self._get_headers(),
+                json=payload,
+                timeout=60
+            )
+            
+            if response.status_code != 200:
+                error_text = response.text[:300] if response.text else f"Status {response.status_code}"
+                user_error = self._parse_error_message(error_text, model)
+                return {"success": False, "text": "", "error": user_error}
+            
+            data = response.json()
+            
+            if "choices" in data and len(data["choices"]) > 0:
+                message = data["choices"][0].get("message", {})
+                text = message.get("content", "")
+                return {"success": True, "text": text, "error": ""}
+            else:
+                return {"success": False, "text": "", "error": "Không có response từ API."}
+                
+        except requests.exceptions.Timeout:
+            return {"success": False, "text": "", "error": "Timeout khi gọi API."}
+        except Exception as e:
+            return {"success": False, "text": "", "error": f"Lỗi: {str(e)[:100]}"}
+
     def generate_content(self, prompt: str, image: Optional[Image.Image] = None, 
                          image_path: Optional[str] = None, model: str = "") -> Dict[str, Any]:
         """
@@ -250,6 +381,10 @@ class OpenAICompatibleService:
         """
         if not model:
             return {"success": False, "text": "", "error": "Chưa chọn model."}
+        
+        # Check if this is a Mistral OCR model - uses special OCR API
+        if model.startswith("mistral-ocr") or model.startswith("pixtral"):
+            return self._generate_mistral_ocr(prompt, image, image_path, model)
         
         messages = []
         content = []
