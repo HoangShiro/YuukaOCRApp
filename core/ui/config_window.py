@@ -11,10 +11,10 @@ from PySide6.QtCore import Qt, Signal, QEvent, QTimer, QElapsedTimer, QPointF, Q
 from core.physics import PhysicsMovableWidget
 from core import update
 from core.logging import Logger
-from plugins.openai_compatible import PROVIDERS
+from plugins.openai_compatible import PROVIDERS, get_providers_with_api_keys
 
 from .themed_color_picker import ThemedColorDialog
-from .config_tabs.system_tab import create_system_tab
+from .config_tabs.system_tab import create_system_tab, populate_provider_combo, populate_model_combo
 from .config_tabs.theme_tab import create_theme_tab
 from .config_tabs.layout_physics_tab import create_layout_physics_tab
 from .config_tabs.hooking_tab import create_hooking_tab
@@ -40,7 +40,12 @@ class ConfigWindow(PhysicsMovableWidget):
         self.drag_pos = None; self.current_pos_mode = 'auto'
         self.container = QWidget(self); self.container.setObjectName("container")
         self.session_timer = None
-        self.color_picker_dialog = None 
+        self.color_picker_dialog = None
+        
+        # Track recent providers and models for suggestions
+        self._recent_providers = []
+        self._recent_models = {}  # {provider_id: [model1, model2, ...]}
+        self._providers_with_keys = []
 
         self._setup_ui()
         self.apply_stylesheet({}, {}, {})
@@ -224,6 +229,27 @@ class ConfigWindow(PhysicsMovableWidget):
         theme_data = {'accent_color': self.theme_accent_preview.text(), 'sub_win_bg': self.theme_bg_preview.text(), 'sub_win_text': self.theme_text_preview.text(), 'sub_win_font_family': self.font_family_combo.currentFont().family(), 'sub_win_font_size': self.font_size_spinbox.value()}
         hotkey_text = self.ocr_hotkey_button.text()
         if hotkey_text.startswith("Đang ghi...") or "không được hỗ trợ" in hotkey_text: hotkey_text = self.ocr_hotkey_button._original_text
+        
+        # Get current provider and model (use data to avoid icon prefixes)
+        current_provider = self.provider_combo.currentData()
+        current_model = self.gemini_model_combo.currentData() or self.gemini_model_combo.currentText()
+        
+        # Update recent providers (max 5, most recent first)
+        if current_provider and current_provider not in ['', None]:
+            if current_provider in self._recent_providers:
+                self._recent_providers.remove(current_provider)
+            self._recent_providers.insert(0, current_provider)
+            self._recent_providers = self._recent_providers[:5]
+        
+        # Update recent models for current provider (max 5, most recent first)
+        if current_provider and current_model and current_model not in ['', None, 'Vui lòng xác thực API key', 'Không tìm thấy model']:
+            if current_provider not in self._recent_models:
+                self._recent_models[current_provider] = []
+            if current_model in self._recent_models[current_provider]:
+                self._recent_models[current_provider].remove(current_model)
+            self._recent_models[current_provider].insert(0, current_model)
+            self._recent_models[current_provider] = self._recent_models[current_provider][:5]
+        
         config_data = {
             'auto_update_enabled': self.auto_update_cb.isChecked(), 'start_with_system': self.start_with_system_cb.isChecked(), 
             'process_text_clipboard': self.text_clipboard_cb.isChecked(), 'process_file_clipboard': self.file_clipboard_cb.isChecked(), 
@@ -231,8 +257,9 @@ class ConfigWindow(PhysicsMovableWidget):
             'prompt_enabled': self.prompt_enabled_cb.isChecked(), 'custom_prompt': self.custom_prompt_edit.toPlainText().strip(), 
             'theme': theme_data, 'sub_window_position': self.current_pos_mode, 'sub_window_spacing': self.spacing_slider.value(), 
             'min_sub_win_width': self.min_sub_win_width_slider.value(), 'ui_scale': self.ui_scale_slider.value(), 
-            'hook_ocr_hotkey': hotkey_text, 'gemini_model': self.gemini_model_combo.currentText(),
-            'api_provider': self.provider_combo.currentData(), 'custom_base_url': self.custom_base_url_edit.text().strip()
+            'hook_ocr_hotkey': hotkey_text, 'gemini_model': current_model,
+            'api_provider': current_provider, 'custom_base_url': self.custom_base_url_edit.text().strip(),
+            'recent_providers': self._recent_providers, 'recent_models': self._recent_models
         }
         close_color = QColor(self.theme_close_button_preview.text());
         if close_color.isValid(): config_data['close_button_color'] = list(close_color.getRgb()[:3])
@@ -311,10 +338,18 @@ class ConfigWindow(PhysicsMovableWidget):
         self.snipping_clipboard_cb.setChecked(config_data.get('process_snipping_clipboard', True))
         self.prompt_enabled_cb.setChecked(config_data.get('prompt_enabled', False))
         self.custom_prompt_edit.setText(config_data.get('custom_prompt', ''))
-        # YUUKA UPDATE: Load provider and custom base URL
+        
+        # YUUKA UPDATE: Load recent providers and models from config
+        self._recent_providers = config_data.get('recent_providers', [])
+        self._recent_models = config_data.get('recent_models', {})
+        self._providers_with_keys = get_providers_with_api_keys()
+        
+        # Repopulate provider combo with recent providers and key icons
         provider_id = config_data.get('api_provider', 'gemini')
+        populate_provider_combo(self.provider_combo, self._recent_providers, self._providers_with_keys)
         provider_index = self.provider_combo.findData(provider_id)
         if provider_index >= 0: self.provider_combo.setCurrentIndex(provider_index)
+        
         is_custom = provider_id == "custom"
         self.custom_base_url_label.setVisible(is_custom)
         self.custom_base_url_edit.setVisible(is_custom)
@@ -328,8 +363,19 @@ class ConfigWindow(PhysicsMovableWidget):
         for param, (slider, label) in self.hook_sliders.items(): val = config_data.get(param, app_configs.get(param, 0)); slider.setValue(val); label.setText(str(val))
         for param, (slider, label, scale) in self.physic_sliders.items(): val = config_data.get(param, app_configs.get(param, 0.1)); slider.setValue(int(val / scale)); label.setText(f"{val:.2f}")
         hotkey = config_data.get('hook_ocr_hotkey', app_configs.get('HOOK_OCR_HOTKEY', 'middle')); self.ocr_hotkey_button.set_display_text(hotkey)
-        self.update_api_key_status(api_key_info.get('key'), api_key_info.get('verified', False), api_key_info.get('models', []))
-        if config_data.get('gemini_model'): self.gemini_model_combo.setCurrentText(config_data.get('gemini_model'))
+        
+        # Load API key status and models with recent model suggestions
+        recent_models_for_provider = self._recent_models.get(provider_id, [])
+        self.update_api_key_status(api_key_info.get('key'), api_key_info.get('verified', False), api_key_info.get('models', []), recent_models_for_provider)
+        if config_data.get('gemini_model'): 
+            # Find by data first, then by text
+            model_name = config_data.get('gemini_model')
+            model_index = self.gemini_model_combo.findData(model_name)
+            if model_index >= 0:
+                self.gemini_model_combo.setCurrentIndex(model_index)
+            else:
+                self.gemini_model_combo.setCurrentText(model_name)
+        
         self.apply_stylesheet(theme_config, config_data, app_configs); self._update_log_display(log_data); self.update_ui_preview(base_pixmap)
         for widget in self.findChildren(QWidget): widget.blockSignals(False)
         self.adjustSize()
@@ -363,25 +409,57 @@ class ConfigWindow(PhysicsMovableWidget):
         if preview_width > 10: self.ui_preview_label.setPixmap(pixmap.scaledToWidth(preview_width, Qt.SmoothTransformation)); self.ui_preview_label.setText("") 
         else: self.ui_preview_label.setText("Giao diện hiện tại")
 
-    def update_api_key_status(self, key, is_verified, models=[]):
-        self.gemini_model_combo.blockSignals(True); self.gemini_model_combo.clear()
+    def update_api_key_status(self, key, is_verified, models=[], recent_models=None):
         # Always keep the input field empty
         self.api_key_edit.clear()
+        
+        # Get current provider for recent models lookup
+        current_provider = self.provider_combo.currentData()
+        if recent_models is None:
+            recent_models = self._recent_models.get(current_provider, [])
+        
         if is_verified:
             # Show masked key in label: "API Key: *****aNL" (last 3 chars visible)
             masked_key = f"*****{key[-3:]}" if len(key) >= 3 else "*****"
             self.api_key_label.setText(f"API Key: {masked_key}")
             self.api_key_status_label.setText("Key hợp lệ và đã được lưu."); self.api_key_status_label.setStyleSheet("color: #77cc77;")
-            if models: self.gemini_model_combo.addItems(models); self.gemini_model_combo.setEnabled(True)
-            else: self.gemini_model_combo.addItem("Không tìm thấy model"); self.gemini_model_combo.setEnabled(False)
+            
+            # Populate model combo with recent models first
+            if models:
+                populate_model_combo(self.gemini_model_combo, models, recent_models)
+            else:
+                self.gemini_model_combo.blockSignals(True)
+                self.gemini_model_combo.clear()
+                self.gemini_model_combo.addItem("Không tìm thấy model")
+                self.gemini_model_combo.setEnabled(False)
+                self.gemini_model_combo.blockSignals(False)
+            
+            # Update providers with keys list and refresh combo display
+            self._providers_with_keys = get_providers_with_api_keys()
+            # Refresh provider combo to show key icon for newly verified provider
+            current_provider_id = self.provider_combo.currentData()
+            self.provider_combo.blockSignals(True)
+            populate_provider_combo(self.provider_combo, self._recent_providers, self._providers_with_keys)
+            provider_index = self.provider_combo.findData(current_provider_id)
+            if provider_index >= 0: self.provider_combo.setCurrentIndex(provider_index)
+            self.provider_combo.blockSignals(False)
         elif key:
             masked_key = f"*****{key[-3:]}" if len(key) >= 3 else "*****"
             self.api_key_label.setText(f"API Key: {masked_key}")
-            self.api_key_status_label.setText("Key không hợp lệ hoặc đã hết hạn."); self.api_key_status_label.setStyleSheet("color: #ff7777;"); self.gemini_model_combo.setEnabled(False)
+            self.api_key_status_label.setText("Key không hợp lệ hoặc đã hết hạn."); self.api_key_status_label.setStyleSheet("color: #ff7777;")
+            self.gemini_model_combo.blockSignals(True)
+            self.gemini_model_combo.clear()
+            self.gemini_model_combo.addItem("Vui lòng xác thực API key")
+            self.gemini_model_combo.setEnabled(False)
+            self.gemini_model_combo.blockSignals(False)
         else:
             self.api_key_label.setText("API Key:")
-            self.api_key_status_label.setText("Chưa có API key."); self.api_key_status_label.setStyleSheet("color: #aaa;"); self.gemini_model_combo.setEnabled(False)
-        self.gemini_model_combo.blockSignals(False)
+            self.api_key_status_label.setText("Chưa có API key."); self.api_key_status_label.setStyleSheet("color: #aaa;")
+            self.gemini_model_combo.blockSignals(True)
+            self.gemini_model_combo.clear()
+            self.gemini_model_combo.addItem("Vui lòng xác thực API key")
+            self.gemini_model_combo.setEnabled(False)
+            self.gemini_model_combo.blockSignals(False)
         
     def _on_pos_button_clicked(self, button): self.current_pos_mode = (['up', 'down', 'left', 'right', 'auto'])[self.pos_button_group.id(button)]; self._emit_changes()
     def _on_hotkey_captured(self, hotkey: str): self.ocr_hotkey_button.set_display_text(hotkey); self._emit_changes()

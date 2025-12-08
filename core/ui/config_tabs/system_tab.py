@@ -5,7 +5,96 @@ from PySide6.QtWidgets import (QVBoxLayout, QWidget, QCheckBox, QLabel, QFrame,
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import QUrl, Qt
 
-from plugins.openai_compatible import get_provider_list, PROVIDERS
+from plugins.openai_compatible import get_provider_list, PROVIDERS, get_providers_with_api_keys
+
+
+def populate_provider_combo(combo: QComboBox, recent_providers: list = None, providers_with_keys: list = None):
+    """
+    Populate provider combo with recent providers first, then remaining providers.
+    Adds 🔑 icon to providers that have API keys saved.
+    
+    Args:
+        combo: QComboBox to populate
+        recent_providers: List of recently used provider IDs (max 5)
+        providers_with_keys: List of provider IDs that have API keys saved
+    """
+    combo.clear()
+    if recent_providers is None:
+        recent_providers = []
+    if providers_with_keys is None:
+        providers_with_keys = []
+    
+    all_providers = get_provider_list()
+    provider_dict = {p["id"]: p for p in all_providers}
+    added_ids = set()
+    
+    # Helper function to get display name with key icon
+    def get_display_name(provider_id: str, name: str) -> str:
+        if provider_id in providers_with_keys:
+            return f"{name} 🔑"
+        return name
+    
+    # Add recent providers first (up to 5)
+    for provider_id in recent_providers[:5]:
+        if provider_id in provider_dict and provider_id not in added_ids:
+            p = provider_dict[provider_id]
+            display_name = get_display_name(provider_id, p["name"])
+            combo.addItem(display_name, provider_id)
+            added_ids.add(provider_id)
+    
+    # Add separator if we have recent providers
+    if added_ids:
+        combo.insertSeparator(combo.count())
+    
+    # Add remaining providers
+    for p in all_providers:
+        if p["id"] not in added_ids:
+            display_name = get_display_name(p["id"], p["name"])
+            combo.addItem(display_name, p["id"])
+            added_ids.add(p["id"])
+
+
+def populate_model_combo(combo: QComboBox, models: list, recent_models: list = None):
+    """
+    Populate model combo with recent models first, then remaining models.
+    
+    Args:
+        combo: QComboBox to populate
+        models: Full list of available models
+        recent_models: List of recently used model names for this provider (max 5)
+    """
+    combo.blockSignals(True)
+    combo.clear()
+    
+    if not models:
+        combo.addItem("Vui lòng xác thực API key")
+        combo.setEnabled(False)
+        combo.blockSignals(False)
+        return
+    
+    if recent_models is None:
+        recent_models = []
+    
+    added_models = set()
+    
+    # Add recent models first (up to 5)
+    for model in recent_models[:5]:
+        if model in models and model not in added_models:
+            combo.addItem(f"⏱ {model}", model)
+            added_models.add(model)
+    
+    # Add separator if we have recent models
+    if added_models:
+        combo.insertSeparator(combo.count())
+    
+    # Add remaining models
+    for model in models:
+        if model not in added_models:
+            combo.addItem(model, model)
+            added_models.add(model)
+    
+    combo.setEnabled(True)
+    combo.blockSignals(False)
 
 def create_system_tab(self: QWidget) -> QWidget:
     """
@@ -77,6 +166,7 @@ def create_system_tab(self: QWidget) -> QWidget:
     provider_header_layout.addStretch()
     
     self.provider_combo = QComboBox()
+    # Initial population with all providers (will be repopulated with recent in load_config)
     providers = get_provider_list()
     for p in providers:
         self.provider_combo.addItem(p["name"], p["id"])

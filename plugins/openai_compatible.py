@@ -713,3 +713,63 @@ def detect_provider_from_key(api_key: str) -> Optional[str]:
         return "github"
     
     return None
+
+
+def get_providers_with_api_keys(env_filepath: str = None) -> List[str]:
+    """
+    Get list of provider IDs that have API keys saved in .env file.
+    
+    Args:
+        env_filepath: Path to .env file. If None, uses default user/.env
+        
+    Returns:
+        List of provider IDs that have non-empty API keys
+    """
+    if env_filepath is None:
+        # Default path: user/.env relative to this file's parent directory
+        env_filepath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'user', '.env')
+    
+    providers_with_keys = []
+    
+    # Map of env variable names to provider IDs
+    env_to_provider = {
+        'GEMINI_API_KEY': 'gemini',
+        'GOOGLE_API_KEY': 'gemini',  # Legacy support
+        'OPENROUTER_API_KEY': 'openrouter',
+        'GROQ_API_KEY': 'groq',
+        'GITHUB_API_KEY': 'github',
+        'CEREBRAS_API_KEY': 'cerebras',
+        'MISTRAL_API_KEY': 'mistral',
+        'COHERE_API_KEY': 'cohere',
+        'CLOUDFLARE_API_KEY': 'cloudflare',
+        'NVIDIA_API_KEY': 'nvidia_nim',
+        'SAMBANOVA_API_KEY': 'sambanova',
+        'HUGGINGFACE_API_KEY': 'huggingface',
+        'FIREWORKS_API_KEY': 'fireworks',
+        'TOGETHER_API_KEY': 'together',
+        'NEBIUS_API_KEY': 'nebius',
+        'NOVITA_API_KEY': 'novita',
+        'HYPERBOLIC_API_KEY': 'hyperbolic',
+        'SCALEWAY_API_KEY': 'scaleway',
+        'CUSTOM_API_KEY': 'custom',
+    }
+    
+    if not os.path.exists(env_filepath):
+        return providers_with_keys
+    
+    try:
+        with open(env_filepath, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if '=' in line and not line.startswith('#'):
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    if key in env_to_provider and value:
+                        provider_id = env_to_provider[key]
+                        if provider_id not in providers_with_keys:
+                            providers_with_keys.append(provider_id)
+    except Exception:
+        pass
+    
+    return providers_with_keys
