@@ -260,17 +260,7 @@ class GeminiOCRPlugin(QObject):
     def _check_clipboard_content(self):
         if self.just_copied_by_yuuka: self.just_copied_by_yuuka = False; return
         if not self.model:
-            # Auto-detect API key from clipboard for any provider
-            try:
-                cb_text = pyperclip.paste()
-                if cb_text and cb_text.strip() and self._is_new_content(cb_text.strip()):
-                    key = cb_text.strip()
-                    # Check if it looks like an API key
-                    detected_provider = detect_provider_from_key(key)
-                    if detected_provider or (len(key) > 20 and key.isalnum() or key.startswith('sk-')):
-                        self.last_clipboard_content = key
-                        self.handle_api_key_attempt(key)
-            except Exception: pass
+            # Skip clipboard processing when API key is not configured
             return
         
         if self._get_user_config_value('process_snipping_clipboard', True):

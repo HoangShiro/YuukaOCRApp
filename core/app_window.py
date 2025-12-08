@@ -233,7 +233,7 @@ class MainWindow(PhysicsMovableWidget):
         else:
             self.is_api_key_needed = True
             self.update_status("...")
-            self.update_status("Copy Gemini API key đi~")
+            self.update_status("Copy API key đi~")
 
     def _get_current_physics_config(self):
         return {
@@ -529,7 +529,7 @@ class MainWindow(PhysicsMovableWidget):
         hotkey = self.user_config.get('hook_ocr_hotkey', 'phím tắt').upper()
         
         if self.is_api_key_needed:
-            self.update_status("Copy Gemini API key đi~")
+            self.update_status("Copy API key đi~")
         elif self.is_hooked:
             self.update_status(f"Nhấn '{hotkey}' để OCR.")
         elif self.user_config.get('process_text_clipboard', False):
@@ -606,7 +606,7 @@ class MainWindow(PhysicsMovableWidget):
             self.hooked_win_rect_physical = None; self.hook_offset_logical = QPoint(0,0)
             self._reset_roi_state()
             if self.is_api_key_needed:
-                self.update_status("Copy Gemini API key đi~")
+                self.update_status("Copy API key đi~")
             else:   
                 self.update_status("Cap ảnh/file đi~", 3000)
             if self.config_window.isVisible(): self.config_window.hide()
@@ -736,7 +736,7 @@ class MainWindow(PhysicsMovableWidget):
     def handle_api_key_needed(self):
         self.is_api_key_needed = True; self.last_known_api_key = ""; self.available_models = []
         self.config_window.update_api_key_status(self.last_known_api_key, False, [])
-        self.update_status("Copy Gemini API key đi~")
+        self.update_status("Copy API key đi~")
         
     def handle_api_key_failed(self, attempted_key):
         self.is_api_key_needed = True; self.last_known_api_key = attempted_key; self.available_models = []
