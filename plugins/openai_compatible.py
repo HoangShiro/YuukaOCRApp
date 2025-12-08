@@ -177,15 +177,37 @@ class OpenAICompatibleService:
             return False, f"Lỗi không xác định: {str(e)[:50]}", []
     
     def _parse_models_response(self, data: Dict) -> List[str]:
-        """Parse models list from API response"""
+        """Parse models list from API response, prioritizing free and vision models"""
         models = []
+        model_info = {}  # Store additional info for sorting
         
         if "data" in data and isinstance(data["data"], list):
-            # Standard OpenAI format
+            # Standard OpenAI/OpenRouter format
             for model in data["data"]:
                 model_id = model.get("id", "")
-                if model_id:
-                    models.append(model_id)
+                if not model_id:
+                    continue
+                
+                models.append(model_id)
+                
+                # Extract pricing info (OpenRouter specific)
+                pricing = model.get("pricing", {})
+                prompt_price = float(pricing.get("prompt", "1") or "1")
+                
+                # Extract modality info (OpenRouter specific)
+                architecture = model.get("architecture", {})
+                input_modalities = architecture.get("input_modalities", [])
+                has_vision = "image" in input_modalities
+                
+                # Check if it's a free model
+                is_free = prompt_price == 0 or ":free" in model_id.lower()
+                
+                model_info[model_id] = {
+                    "is_free": is_free,
+                    "has_vision": has_vision,
+                    "price": prompt_price
+                }
+                
         elif isinstance(data, list):
             # Some providers return a direct list
             for model in data:
@@ -197,18 +219,42 @@ class OpenAICompatibleService:
                     continue
                 if model_id:
                     models.append(model_id)
+                    model_info[model_id] = {"is_free": False, "has_vision": False, "price": 1}
         
-        # Filter and sort models - prioritize chat/vision models
-        priority_keywords = ['gpt', 'claude', 'llama', 'gemma', 'mistral', 'qwen', 'vision', 'chat']
+        # Sort models with priority:
+        # 1. Free models with vision (best for OCR)
+        # 2. Free models
+        # 3. Paid models with vision
+        # 4. Other models
+        # Within each group, sort by popular model names
         
-        def model_priority(m):
-            m_lower = m.lower()
+        priority_keywords = ['gpt', 'claude', 'llama', 'gemma', 'mistral', 'qwen', 'pixtral', 'llava', 'vision']
+        
+        def model_sort_key(model_id):
+            info = model_info.get(model_id, {"is_free": False, "has_vision": False, "price": 1})
+            
+            # Priority score: lower is better
+            # Free + Vision = 0, Free = 1, Paid + Vision = 2, Paid = 3
+            if info["is_free"] and info["has_vision"]:
+                tier = 0
+            elif info["is_free"]:
+                tier = 1
+            elif info["has_vision"]:
+                tier = 2
+            else:
+                tier = 3
+            
+            # Secondary sort by keyword priority
+            m_lower = model_id.lower()
+            keyword_priority = len(priority_keywords)
             for i, kw in enumerate(priority_keywords):
                 if kw in m_lower:
-                    return (i, m)
-            return (len(priority_keywords), m)
+                    keyword_priority = i
+                    break
+            
+            return (tier, keyword_priority, model_id)
         
-        models.sort(key=model_priority)
+        models.sort(key=model_sort_key)
         return models
     
     def _image_to_base64(self, image: Image.Image) -> str:

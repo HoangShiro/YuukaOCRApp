@@ -153,7 +153,8 @@ class GeminiOCRPlugin(QObject):
                 self.api_key = key
                 self.model = True  # Mark as ready (not using Gemini model object)
                 self.logger.console_log(f"Đã kết nối với {provider_name} thành công! Có {len(models_list)} models.")
-                self.apiKeyVerified.emit(key, models_list[:50])  # Limit to 50 models for UI
+                # Show up to 100 models, prioritized by free/vision
+                self.apiKeyVerified.emit(key, models_list[:100])
             else:
                 self.logger.console_log(f"Lỗi xác thực {provider_name}: {message}")
                 self.api_key = None
