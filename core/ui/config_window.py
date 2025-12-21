@@ -155,12 +155,44 @@ class ConfigWindow(PhysicsMovableWidget):
         if self.prompt_api_stack.currentIndex() == 0:
             self._load_key_editor_from_env()
             self.prompt_api_stack.setCurrentIndex(1)
+            self._debug_key_editor_styles()
             if hasattr(self, 'api_key_editor_toggle_btn'):
                 self.api_key_editor_toggle_btn.setToolTip("Quay lại Prompt & API")
         else:
             self.prompt_api_stack.setCurrentIndex(0)
             if hasattr(self, 'api_key_editor_toggle_btn'):
                 self.api_key_editor_toggle_btn.setToolTip("Mở Key Editor")
+
+    def _debug_key_editor_styles(self):
+        """Print runtime style info for Key Editor inputs into the in-app console."""
+        if not self.logger:
+            return
+        if not hasattr(self, 'key_editor_text_edits') or not isinstance(self.key_editor_text_edits, dict):
+            self.logger.console_log("[DEBUG] Key Editor: key_editor_text_edits not found")
+            return
+
+        self.logger.console_log("[DEBUG] Key Editor: dumping QTextEdit styles...")
+        # Limit output to a few entries to avoid spam
+        shown = 0
+        for pid, te in self.key_editor_text_edits.items():
+            try:
+                vp = te.viewport()
+                te_name = te.objectName()
+                vp_name = vp.objectName()
+                te_style = (te.styleSheet() or "").replace("\n", " ")
+                # Palette base colors (where Qt paints background)
+                te_base = te.palette().color(te.palette().ColorRole.Base).name(QColor.NameFormat.HexArgb)
+                vp_base = vp.palette().color(vp.palette().ColorRole.Base).name(QColor.NameFormat.HexArgb)
+                self.logger.console_log(
+                    f"[DEBUG] provider={pid} class={te.metaObject().className()} obj={te_name} "
+                    f"viewport_obj={vp_name} pal_base={te_base} vp_pal_base={vp_base} "
+                    f"style_len={len(te_style)}"
+                )
+            except Exception as e:
+                self.logger.console_log(f"[DEBUG] provider={pid} error={e}")
+            shown += 1
+            if shown >= 5:
+                break
 
     def _load_key_editor_from_env(self):
         if not hasattr(self, 'key_editor_text_edits'):
