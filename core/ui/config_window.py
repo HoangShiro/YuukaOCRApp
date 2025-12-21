@@ -168,6 +168,19 @@ class ConfigWindow(PhysicsMovableWidget):
         """Print runtime style info for Key Editor inputs into the in-app console."""
         if not self.logger:
             return
+
+        # Compare against the normal single-line API key input if present
+        try:
+            le = getattr(self, 'api_key_edit', None)
+            if le is not None:
+                le_style = (le.styleSheet() or "").replace("\n", " ")
+                le_base = le.palette().color(le.palette().ColorRole.Base).name(QColor.NameFormat.HexArgb)
+                self.logger.console_log(
+                    f"[DEBUG] api_key_edit class={le.metaObject().className()} obj={le.objectName()} "
+                    f"pal_base={le_base} style_len={len(le_style)}"
+                )
+        except Exception as e:
+            self.logger.console_log(f"[DEBUG] api_key_edit error={e}")
         if not hasattr(self, 'key_editor_text_edits') or not isinstance(self.key_editor_text_edits, dict):
             self.logger.console_log("[DEBUG] Key Editor: key_editor_text_edits not found")
             return
@@ -258,6 +271,10 @@ class ConfigWindow(PhysicsMovableWidget):
         bg_qcolor = QColor(bg_color_str); nav_bg_color = bg_qcolor.lighter(110).name() if bg_qcolor.lightnessF() < 0.5 else bg_qcolor.darker(105).name()
         console_bg_color = QColor(bg_color_str).darker(150).name()
         
+        # Cache theme colors for later (e.g., Key Editor toggled after apply_stylesheet)
+        self._last_accent_color = accent_color
+        self._last_text_color = text_color
+
         self.container.setStyleSheet(f"""
             QToolTip {{ background-color: {nav_bg_color}; color: {text_color}; border: 1px solid {accent_color}; border-radius: 4px; padding: 5px; }}
             #container {{ background-color: {bg_color_str}; border: 1px solid {accent_color}; border-radius: 8px; }}
@@ -334,15 +351,24 @@ class ConfigWindow(PhysicsMovableWidget):
         if not hasattr(self, 'key_editor_text_edits') or not isinstance(self.key_editor_text_edits, dict):
             return
 
-        # Let the global stylesheet (same rules as QLineEdit) drive border/font/padding.
-        # We only force the *viewport* background because Qt often paints QTextEdit's
-        # viewport with a black palette base on Windows.
-        viewport_style = "background-color: rgba(0,0,0,0.2); border: none;"
+        # Use the current theme colors if available.
+        accent = accent_color or getattr(self, '_last_accent_color', None) or '#E98973'
+        text = text_color or getattr(self, '_last_text_color', None) or '#FFFFFF'
+
+        # Important: avoid double alpha blending.
+        # - Global QSS sets QTextEdit background to rgba(0,0,0,0.2)
+        # - If we also set viewport to rgba(0,0,0,0.2), it becomes visually darker than QLineEdit.
+        # So we make the outer QTextEdit transparent and paint the background ONLY on the viewport.
+        te_style = (
+            f"QTextEdit{{background-color: transparent; border: 1px solid {accent}88; "
+            f"border-radius: 5px; color: {text}; padding: 5px;}}"
+            f"QTextEdit:focus{{border-color: {accent};}}"
+        )
+        viewport_style = "background-color: rgba(0,0,0,0.2); border: none; border-radius: 4px;"
 
         for pid, te in self.key_editor_text_edits.items():
             try:
-                # Clear any old per-widget overrides so global theme stays consistent.
-                te.setStyleSheet("")
+                te.setStyleSheet(te_style)
                 # Critical: Qt paints the viewport, not the outer QTextEdit
                 te.viewport().setStyleSheet(viewport_style)
             except Exception:
