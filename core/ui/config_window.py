@@ -292,7 +292,7 @@ class ConfigWindow(PhysicsMovableWidget):
             QCheckBox::indicator:checked {{ background-color: {accent_color}; }}
             QTextEdit, QLineEdit, QFontComboBox, QSpinBox, QComboBox, QScrollArea {{ background-color: transparent; border: 1px solid {accent_color}88; border-radius: 5px; color: {text_color}; padding: 5px; font-family: "{font_family}"; font-size: {font_size}pt; }}
             QTextEdit, QLineEdit, QFontComboBox, QSpinBox, QComboBox {{ background-color: rgba(0,0,0,0.2); }}
-            #key_editor_input_frame {{ background-color: rgba(0,0,0,0.2); border: 1px solid {accent_color}88; border-radius: 5px; }}
+            #key_editor_input_frame {{ background-color: transparent; border: 1px solid {accent_color}88; border-radius: 5px; }}
             #key_editor_input_frame[focused="true"] {{ border-color: {accent_color}; }}
             QTextEdit#key_editor_text {{ background-color: transparent; border: none; }}
             QScrollArea {{ background-color: transparent; border: none; }}

@@ -298,6 +298,8 @@ def create_system_tab(self: QWidget) -> QWidget:
         frame.setObjectName("key_editor_input_frame")
         frame.setProperty("focused", False)
         frame.setFixedHeight(80)
+        frame.setAutoFillBackground(False)
+        frame.setAttribute(Qt.WA_TranslucentBackground, True)
         fl = QVBoxLayout(frame)
         fl.setContentsMargins(5, 5, 5, 5)
         fl.setSpacing(0)
@@ -306,7 +308,14 @@ def create_system_tab(self: QWidget) -> QWidget:
         te.setObjectName("key_editor_text")
         te.setPlaceholderText("key1\nkey2\n...")
         te.setFrameShape(QFrame.NoFrame)
+        te.setAutoFillBackground(False)
+        te.setAttribute(Qt.WA_TranslucentBackground, True)
         te.setStyleSheet("background: transparent; border: none;")
+
+        pal_te = te.palette()
+        pal_te.setColor(QPalette.ColorRole.Base, QColor(0, 0, 0, 0))
+        pal_te.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0, 0))
+        te.setPalette(pal_te)
 
         # Force viewport to be transparent (avoid black Base fill)
         vp = te.viewport()
@@ -315,6 +324,7 @@ def create_system_tab(self: QWidget) -> QWidget:
         vp.setStyleSheet("background: transparent; border: none;")
         pal = vp.palette()
         pal.setColor(QPalette.ColorRole.Base, QColor(0, 0, 0, 0))
+        pal.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0, 0))
         vp.setPalette(pal)
 
         # Focus handling (highlight the wrapper frame)
