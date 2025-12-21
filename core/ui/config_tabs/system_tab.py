@@ -280,6 +280,33 @@ def create_system_tab(self: QWidget) -> QWidget:
     self.key_editor_scroll.setObjectName("key_editor_scroll")
     self.key_editor_scroll.setWidgetResizable(True)
     self.key_editor_container = QWidget()
+
+    # Make scroll viewport truly transparent (otherwise it often paints black on Windows)
+    try:
+        self.key_editor_scroll.setAutoFillBackground(False)
+        self.key_editor_scroll.setAttribute(Qt.WA_TranslucentBackground, True)
+        svp = self.key_editor_scroll.viewport()
+        svp.setAutoFillBackground(False)
+        svp.setAttribute(Qt.WA_TranslucentBackground, True)
+        svp.setStyleSheet("background: transparent; border: none;")
+        svp_pal = svp.palette()
+        svp_pal.setColor(QPalette.ColorRole.Base, QColor(0, 0, 0, 0))
+        svp_pal.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0, 0))
+        svp.setPalette(svp_pal)
+    except Exception:
+        pass
+
+    try:
+        self.key_editor_container.setAutoFillBackground(False)
+        self.key_editor_container.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.key_editor_container.setStyleSheet("background: transparent;")
+        kc_pal = self.key_editor_container.palette()
+        kc_pal.setColor(QPalette.ColorRole.Base, QColor(0, 0, 0, 0))
+        kc_pal.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0, 0))
+        self.key_editor_container.setPalette(kc_pal)
+    except Exception:
+        pass
+
     self.key_editor_container_layout = QVBoxLayout(self.key_editor_container)
     self.key_editor_container_layout.setContentsMargins(0, 0, 0, 0)
     self.key_editor_container_layout.setSpacing(8)

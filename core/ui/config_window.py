@@ -295,6 +295,8 @@ class ConfigWindow(PhysicsMovableWidget):
             #key_editor_input_frame {{ background-color: transparent; border: 1px solid {accent_color}88; border-radius: 5px; }}
             #key_editor_input_frame[focused="true"] {{ border-color: {accent_color}; }}
             QTextEdit#key_editor_text {{ background-color: transparent; border: none; }}
+            QScrollArea#key_editor_scroll {{ background-color: transparent; border: none; }}
+            QScrollArea#key_editor_scroll QWidget#qt_scrollarea_viewport {{ background-color: transparent; }}
             QScrollArea {{ background-color: transparent; border: none; }}
             QTextEdit:focus, QLineEdit:focus, QFontComboBox:focus, QSpinBox:focus, QComboBox:focus {{ border-color: {accent_color}; }}
             QPushButton {{ background-color: rgba(255,255,255,0.1); color: {text_color}; border: 1px solid {accent_color}88; border-radius: 5px; padding: 5px 8px; font-family: "{font_family}"; }}
