@@ -270,13 +270,16 @@ class ConfigWindow(PhysicsMovableWidget):
                 padding: 0 3px;
                 background-color: {bg_color_str};
             }}
+            /* Key Editor QTextEdit needs explicit viewport styling on Windows/Qt */
             QTextEdit#key_editor_text {{
-                background-color: rgba(0,0,0,0.15);
-                border: 1px solid {accent_color}44;
+                background-color: rgba(0,0,0,0.2);
+                border: 1px solid {accent_color}88;
                 border-radius: 5px;
                 padding: 6px;
             }}
-            QTextEdit#key_editor_text QAbstractScrollArea::viewport {{ background-color: rgba(0,0,0,0.15); }}
+            QTextEdit#key_editor_text QAbstractScrollArea::viewport {{ background-color: rgba(0,0,0,0.2); }}
+            QTextEdit#key_editor_text QWidget#qt_scrollarea_viewport {{ background-color: rgba(0,0,0,0.2); }}
+            QTextEdit#key_editor_text:focus {{ border-color: {accent_color}; }}
             #logEntryButton {{ background-color: transparent; border: none; padding: 8px; color: {text_color}dd; text-align: left; }}
             #logEntryButton:hover {{ background-color: rgba(255,255,255,0.08); }}
             #navButton {{ text-align: left; background-color: transparent; border: 1px solid transparent; padding: 8px 13px; }}
