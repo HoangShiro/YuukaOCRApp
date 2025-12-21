@@ -668,7 +668,8 @@ class ConfigWindow(PhysicsMovableWidget):
         except Exception:
             pass
 
-        if watched == self.ui_drop_zone and event.type() == QEvent.MouseButtonPress:
+        ui_drop_zone = getattr(self, 'ui_drop_zone', None)
+        if ui_drop_zone is not None and watched == ui_drop_zone and event.type() == QEvent.MouseButtonPress:
             if event.button() == Qt.LeftButton: filepath, _ = QFileDialog.getOpenFileName(self, "Chọn file giao diện", "", "Image Files (*.png)"); filepath and self.uiImageChanged.emit(filepath); return True
         return super().eventFilter(watched, event)
     def keyPressEvent(self, event): (event.key() == Qt.Key_Escape and self.hide()); super().keyPressEvent(event)
