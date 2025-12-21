@@ -371,6 +371,18 @@ class ConfigWindow(PhysicsMovableWidget):
             except Exception:
                 continue
 
+        # Ensure wrapper frames paint their background (some Windows styles require this)
+        try:
+            if hasattr(self, 'key_editor_text_to_frame') and isinstance(self.key_editor_text_to_frame, dict):
+                for frame in self.key_editor_text_to_frame.values():
+                    if frame is None:
+                        continue
+                    frame.setAttribute(Qt.WA_StyledBackground, True)
+                    frame.setAutoFillBackground(True)
+                    frame.style().unpolish(frame); frame.style().polish(frame); frame.update()
+        except Exception:
+            pass
+
     def _run_update_check_in_thread(self): status, message, details, _ = update.check_for_updates(); self.updateCheckCompleted.emit(status, message, details)
     def _on_update_check_completed(self, status, message, details):
         self.update_status_label.setText(message)
