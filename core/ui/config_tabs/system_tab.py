@@ -15,7 +15,8 @@ from plugins.openai_compatible import get_provider_list, PROVIDERS, get_provider
 
 def _make_edit_icon() -> QIcon:
     """Create a small pencil/edit icon from inline SVG."""
-    svg = """<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 20h9\"/><path d=\"M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z\"/></svg>"""
+    # Note: Qt's SVG renderer doesn't reliably resolve `currentColor`, so we use white.
+    svg = """<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#FFFFFF\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 20h9\"/><path d=\"M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z\"/></svg>"""
     if QSvgRenderer is None:
         # Fallback: empty icon (button can still show tooltip)
         return QIcon()
@@ -189,6 +190,7 @@ def create_system_tab(self: QWidget) -> QWidget:
     header_layout.addWidget(QLabel("<b>Cài đặt Prompt & API</b>"))
     header_layout.addStretch()
     self.api_key_editor_toggle_btn = QPushButton()
+    self.api_key_editor_toggle_btn.setObjectName("api_key_editor_toggle_btn")
     self.api_key_editor_toggle_btn.setFixedSize(24, 24)
     self.api_key_editor_toggle_btn.setToolTip("Mở Key Editor")
     self.api_key_editor_toggle_btn.setCursor(Qt.PointingHandCursor)
@@ -275,6 +277,7 @@ def create_system_tab(self: QWidget) -> QWidget:
     editor_layout.addWidget(QLabel("Mỗi dòng là 1 API key. Lưu xong nhớ bấm 'Xác thực' ở provider bạn dùng để lấy model list."))
 
     self.key_editor_scroll = QScrollArea()
+    self.key_editor_scroll.setObjectName("key_editor_scroll")
     self.key_editor_scroll.setWidgetResizable(True)
     self.key_editor_container = QWidget()
     self.key_editor_container_layout = QVBoxLayout(self.key_editor_container)
@@ -286,8 +289,10 @@ def create_system_tab(self: QWidget) -> QWidget:
         pid = p.get('id')
         pname = p.get('name', pid)
         group = QGroupBox(pname)
+        group.setObjectName("key_editor_group")
         gl = QVBoxLayout(group)
         te = QTextEdit()
+        te.setObjectName("key_editor_text")
         te.setPlaceholderText("key1\nkey2\n...")
         te.setFixedHeight(80)
         gl.addWidget(te)
@@ -301,6 +306,7 @@ def create_system_tab(self: QWidget) -> QWidget:
     self.key_editor_status_label = QLabel("")
     self.key_editor_status_label.setObjectName("api_key_status_label")
     self.key_editor_save_button = QPushButton("Lưu Keys")
+    self.key_editor_save_button.setObjectName("key_editor_save_button")
     editor_layout.addWidget(self.key_editor_status_label)
     editor_layout.addWidget(self.key_editor_save_button)
 
