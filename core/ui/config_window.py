@@ -292,6 +292,9 @@ class ConfigWindow(PhysicsMovableWidget):
             QCheckBox::indicator:checked {{ background-color: {accent_color}; }}
             QTextEdit, QLineEdit, QFontComboBox, QSpinBox, QComboBox, QScrollArea {{ background-color: transparent; border: 1px solid {accent_color}88; border-radius: 5px; color: {text_color}; padding: 5px; font-family: "{font_family}"; font-size: {font_size}pt; }}
             QTextEdit, QLineEdit, QFontComboBox, QSpinBox, QComboBox {{ background-color: rgba(0,0,0,0.2); }}
+            #key_editor_input_frame {{ background-color: rgba(0,0,0,0.2); border: 1px solid {accent_color}88; border-radius: 5px; }}
+            #key_editor_input_frame[focused="true"] {{ border-color: {accent_color}; }}
+            QTextEdit#key_editor_text {{ background-color: transparent; border: none; }}
             QScrollArea {{ background-color: transparent; border: none; }}
             QTextEdit:focus, QLineEdit:focus, QFontComboBox:focus, QSpinBox:focus, QComboBox:focus {{ border-color: {accent_color}; }}
             QPushButton {{ background-color: rgba(255,255,255,0.1); color: {text_color}; border: 1px solid {accent_color}88; border-radius: 5px; padding: 5px 8px; font-family: "{font_family}"; }}
@@ -351,25 +354,17 @@ class ConfigWindow(PhysicsMovableWidget):
         if not hasattr(self, 'key_editor_text_edits') or not isinstance(self.key_editor_text_edits, dict):
             return
 
-        # Use the current theme colors if available.
-        accent = accent_color or getattr(self, '_last_accent_color', None) or '#E98973'
-        text = text_color or getattr(self, '_last_text_color', None) or '#FFFFFF'
-
-        # Deterministic fix on Windows/Qt: QTextEdit paints background on its viewport.
-        # Also avoid double alpha blending by forcing the OUTER QTextEdit background transparent.
-        te_style = (
-            f"QTextEdit{{background-color: transparent; border: 1px solid {accent}88; "
-            f"border-radius: 5px; color: {text}; padding: 5px;}}"
-            f"QTextEdit:focus{{border-color: {accent};}}"
-        )
-        viewport_style = "background-color: rgba(0,0,0,0.2); border: none;"
+        # Key Editor inputs are now wrapped in a styled QFrame. Ensure the QTextEdit + viewport stay transparent.
+        viewport_style = "background: transparent; border: none;"
 
         # Styling is handled by the global stylesheet. We only clear any legacy per-widget overrides.
 
         for pid, te in self.key_editor_text_edits.items():
             try:
-                te.setStyleSheet(te_style)
-                te.viewport().setStyleSheet(viewport_style)
+                te.setStyleSheet("background: transparent; border: none;")
+                vp = te.viewport()
+                vp.setAutoFillBackground(False)
+                vp.setStyleSheet(viewport_style)
             except Exception:
                 continue
 
@@ -659,6 +654,20 @@ class ConfigWindow(PhysicsMovableWidget):
     def dropEvent(self, event):
         if event.mimeData().hasUrls(): url = event.mimeData().urls()[0]; url.isLocalFile() and self.uiImageChanged.emit(url.toLocalFile())
     def eventFilter(self, watched, event):
+        # Key Editor focus highlight (QTextEdit wrapped inside a QFrame)
+        try:
+            if hasattr(self, 'key_editor_text_to_frame') and isinstance(getattr(self, 'key_editor_text_to_frame'), dict):
+                frame = self.key_editor_text_to_frame.get(watched)
+                if frame is not None:
+                    if event.type() == QEvent.FocusIn:
+                        frame.setProperty('focused', True)
+                        frame.style().unpolish(frame); frame.style().polish(frame); frame.update()
+                    elif event.type() == QEvent.FocusOut:
+                        frame.setProperty('focused', False)
+                        frame.style().unpolish(frame); frame.style().polish(frame); frame.update()
+        except Exception:
+            pass
+
         if watched == self.ui_drop_zone and event.type() == QEvent.MouseButtonPress:
             if event.button() == Qt.LeftButton: filepath, _ = QFileDialog.getOpenFileName(self, "Chọn file giao diện", "", "Image Files (*.png)"); filepath and self.uiImageChanged.emit(filepath); return True
         return super().eventFilter(watched, event)

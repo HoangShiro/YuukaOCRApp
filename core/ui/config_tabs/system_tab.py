@@ -2,7 +2,7 @@
 from PySide6.QtWidgets import (QVBoxLayout, QWidget, QCheckBox, QLabel, QFrame,
                                QLineEdit, QPushButton, QHBoxLayout, QStackedWidget,
                                QComboBox, QGroupBox, QTextEdit, QScrollArea, QCompleter)
-from PySide6.QtGui import QDesktopServices, QIcon, QPixmap, QPainter
+from PySide6.QtGui import QDesktopServices, QIcon, QPixmap, QPainter, QColor, QPalette
 from PySide6.QtCore import QUrl, Qt, QStringListModel, QByteArray
 
 try:
@@ -284,6 +284,7 @@ def create_system_tab(self: QWidget) -> QWidget:
     self.key_editor_container_layout.setContentsMargins(0, 0, 0, 0)
     self.key_editor_container_layout.setSpacing(8)
     self.key_editor_text_edits = {}
+    self.key_editor_text_to_frame = {}
 
     for p in get_provider_list():
         pid = p.get('id')
@@ -291,11 +292,37 @@ def create_system_tab(self: QWidget) -> QWidget:
         group = QGroupBox(pname)
         group.setObjectName("key_editor_group")
         gl = QVBoxLayout(group)
+
+        # Input wrapper: draw background/border on a QFrame (more reliable than QTextEdit viewport on Windows)
+        frame = QFrame()
+        frame.setObjectName("key_editor_input_frame")
+        frame.setProperty("focused", False)
+        frame.setFixedHeight(80)
+        fl = QVBoxLayout(frame)
+        fl.setContentsMargins(5, 5, 5, 5)
+        fl.setSpacing(0)
+
         te = QTextEdit()
         te.setObjectName("key_editor_text")
         te.setPlaceholderText("key1\nkey2\n...")
-        te.setFixedHeight(80)
-        gl.addWidget(te)
+        te.setFrameShape(QFrame.NoFrame)
+        te.setStyleSheet("background: transparent; border: none;")
+
+        # Force viewport to be transparent (avoid black Base fill)
+        vp = te.viewport()
+        vp.setAutoFillBackground(False)
+        vp.setAttribute(Qt.WA_TranslucentBackground, True)
+        vp.setStyleSheet("background: transparent; border: none;")
+        pal = vp.palette()
+        pal.setColor(QPalette.ColorRole.Base, QColor(0, 0, 0, 0))
+        vp.setPalette(pal)
+
+        # Focus handling (highlight the wrapper frame)
+        te.installEventFilter(self)
+        self.key_editor_text_to_frame[te] = frame
+
+        fl.addWidget(te)
+        gl.addWidget(frame)
         self.key_editor_text_edits[pid] = te
         self.key_editor_container_layout.addWidget(group)
 
