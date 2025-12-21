@@ -246,6 +246,36 @@ class ConfigWindow(PhysicsMovableWidget):
             QPushButton {{ background-color: rgba(255,255,255,0.1); color: {text_color}; border: 1px solid {accent_color}88; border-radius: 5px; padding: 5px 8px; font-family: "{font_family}"; }}
             QPushButton:hover {{ background-color: rgba(255,255,255,0.2); }} 
             QPushButton:pressed {{ background-color: rgba(255,255,255,0.05); }}
+            #provider_link_button, #api_key_editor_toggle_btn {{
+                padding: 0px;
+                min-width: 24px; max-width: 24px;
+                min-height: 24px; max-height: 24px;
+                border-radius: 5px;
+            }}
+            #provider_link_button:hover, #api_key_editor_toggle_btn:hover {{ background-color: rgba(255,255,255,0.2); }}
+            #provider_link_button:pressed, #api_key_editor_toggle_btn:pressed {{ background-color: rgba(255,255,255,0.05); }}
+            #key_editor_save_button {{ padding: 6px 10px; font-weight: bold; }}
+            #key_editor_scroll {{ background-color: transparent; border: none; }}
+            QGroupBox#key_editor_group {{
+                border: 1px solid {accent_color}66;
+                border-radius: 5px;
+                margin-top: 1ex;
+                padding: 6px;
+                background-color: transparent;
+            }}
+            QGroupBox#key_editor_group::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 0 3px;
+                background-color: {bg_color_str};
+            }}
+            QTextEdit#key_editor_text {{
+                background-color: transparent;
+                border: 1px solid {accent_color}88;
+                border-radius: 5px;
+                padding: 6px;
+            }}
+            QTextEdit#key_editor_text QWidget {{ background-color: transparent; }}
             #logEntryButton {{ background-color: transparent; border: none; padding: 8px; color: {text_color}dd; text-align: left; }}
             #logEntryButton:hover {{ background-color: rgba(255,255,255,0.08); }}
             #navButton {{ text-align: left; background-color: transparent; border: 1px solid transparent; padding: 8px 13px; }}
