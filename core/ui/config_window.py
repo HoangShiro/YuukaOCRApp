@@ -256,6 +256,7 @@ class ConfigWindow(PhysicsMovableWidget):
             #provider_link_button:pressed, #api_key_editor_toggle_btn:pressed {{ background-color: rgba(255,255,255,0.05); }}
             #key_editor_save_button {{ padding: 6px 10px; font-weight: bold; }}
             #key_editor_scroll {{ background-color: transparent; border: none; }}
+            #key_editor_scroll QAbstractScrollArea::viewport {{ background-color: transparent; }}
             QGroupBox#key_editor_group {{
                 border: 1px solid {accent_color}66;
                 border-radius: 5px;
@@ -270,12 +271,12 @@ class ConfigWindow(PhysicsMovableWidget):
                 background-color: {bg_color_str};
             }}
             QTextEdit#key_editor_text {{
-                background-color: transparent;
-                border: 1px solid {accent_color}88;
+                background-color: rgba(0,0,0,0.15);
+                border: 1px solid {accent_color}44;
                 border-radius: 5px;
                 padding: 6px;
             }}
-            QTextEdit#key_editor_text QWidget {{ background-color: transparent; }}
+            QTextEdit#key_editor_text QAbstractScrollArea::viewport {{ background-color: rgba(0,0,0,0.15); }}
             #logEntryButton {{ background-color: transparent; border: none; padding: 8px; color: {text_color}dd; text-align: left; }}
             #logEntryButton:hover {{ background-color: rgba(255,255,255,0.08); }}
             #navButton {{ text-align: left; background-color: transparent; border: 1px solid transparent; padding: 8px 13px; }}
