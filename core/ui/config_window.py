@@ -292,6 +292,8 @@ class ConfigWindow(PhysicsMovableWidget):
             QCheckBox::indicator:checked {{ background-color: {accent_color}; }}
             QTextEdit, QLineEdit, QFontComboBox, QSpinBox, QComboBox, QScrollArea {{ background-color: transparent; border: 1px solid {accent_color}88; border-radius: 5px; color: {text_color}; padding: 5px; font-family: "{font_family}"; font-size: {font_size}pt; }}
             QTextEdit, QLineEdit, QFontComboBox, QSpinBox, QComboBox {{ background-color: rgba(0,0,0,0.2); }}
+            /* Key Editor QTextEdit: force viewport background via correct selector (Windows/Qt paints on viewport) */
+            QTextEdit#key_editor_text QWidget#qt_scrollarea_viewport {{ background-color: rgba(0,0,0,0.2); }}
             QScrollArea {{ background-color: transparent; border: none; }}
             QTextEdit:focus, QLineEdit:focus, QFontComboBox:focus, QSpinBox:focus, QComboBox:focus {{ border-color: {accent_color}; }}
             QPushButton {{ background-color: rgba(255,255,255,0.1); color: {text_color}; border: 1px solid {accent_color}88; border-radius: 5px; padding: 5px 8px; font-family: "{font_family}"; }}
@@ -351,26 +353,12 @@ class ConfigWindow(PhysicsMovableWidget):
         if not hasattr(self, 'key_editor_text_edits') or not isinstance(self.key_editor_text_edits, dict):
             return
 
-        # Use the current theme colors if available.
-        accent = accent_color or getattr(self, '_last_accent_color', None) or '#E98973'
-        text = text_color or getattr(self, '_last_text_color', None) or '#FFFFFF'
-
-        # Important: avoid double alpha blending.
-        # - Global QSS sets QTextEdit background to rgba(0,0,0,0.2)
-        # - If we also set viewport to rgba(0,0,0,0.2), it becomes visually darker than QLineEdit.
-        # So we make the outer QTextEdit transparent and paint the background ONLY on the viewport.
-        te_style = (
-            f"QTextEdit{{background-color: transparent; border: 1px solid {accent}88; "
-            f"border-radius: 5px; color: {text}; padding: 5px;}}"
-            f"QTextEdit:focus{{border-color: {accent};}}"
-        )
-        viewport_style = "background-color: rgba(0,0,0,0.2); border: none; border-radius: 4px;"
+        # Styling is handled by the global stylesheet. We only clear any legacy per-widget overrides.
 
         for pid, te in self.key_editor_text_edits.items():
             try:
-                te.setStyleSheet(te_style)
-                # Critical: Qt paints the viewport, not the outer QTextEdit
-                te.viewport().setStyleSheet(viewport_style)
+                te.setStyleSheet("")
+                te.viewport().setStyleSheet("")
             except Exception:
                 continue
 
