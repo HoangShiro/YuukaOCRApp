@@ -295,9 +295,24 @@ class ConfigWindow(PhysicsMovableWidget):
                 try:
                     pal = te.palette()
                     pal.setColor(QPalette.ColorRole.Base, base_bg)
+                    pal.setColor(QPalette.ColorRole.Window, base_bg)
                     pal.setColor(QPalette.ColorRole.Text, text_qcolor)
+                    pal.setColor(QPalette.ColorRole.WindowText, text_qcolor)
+
+                    # Apply to QTextEdit
                     te.setPalette(pal)
                     te.setAutoFillBackground(True)
+
+                    # Apply to viewport (this is what actually gets painted on Qt/Windows)
+                    vp = te.viewport()
+                    vp.setPalette(pal)
+                    vp.setAutoFillBackground(True)
+
+                    # Apply to any inner viewport widgets if present
+                    for child in vp.findChildren(QWidget):
+                        if child.objectName() == 'qt_scrollarea_viewport':
+                            child.setPalette(pal)
+                            child.setAutoFillBackground(True)
                     te.setStyleSheet(
                         f"QTextEdit{{background-color: rgba(0,0,0,0.2); border: 1px solid {accent_color}88; "
                         f"border-radius: 5px; color: {text_color}; padding: 5px;}}"
