@@ -155,6 +155,11 @@ class ConfigWindow(PhysicsMovableWidget):
         if self.prompt_api_stack.currentIndex() == 0:
             self._load_key_editor_from_env()
             self.prompt_api_stack.setCurrentIndex(1)
+            # Ensure styles are applied even if Qt ignores some selectors
+            try:
+                self._apply_key_editor_styles()
+            except Exception:
+                pass
             if hasattr(self, 'api_key_editor_toggle_btn'):
                 self.api_key_editor_toggle_btn.setToolTip("Quay lại Prompt & API")
         else:
@@ -311,11 +316,59 @@ class ConfigWindow(PhysicsMovableWidget):
             QScrollBar::handle:horizontal:hover {{ background: {accent_color}bb; }}
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
         """)
+        # Apply direct styles for Key Editor widgets (more reliable than QSS selectors on Windows)
+        self._theme_accent_color = accent_color
+        self._theme_text_color = text_color
+        self._theme_bg_color_str = bg_color_str
+        try:
+            self._apply_key_editor_styles()
+        except Exception:
+            pass
         self.theme_accent_preview.setStyleSheet(f"background-color: {accent_color}; border: 1px solid {text_color}44; color: {text_color};"); self.theme_accent_preview.setText(accent_color)
         self.theme_bg_preview.setStyleSheet(f"background-color: {bg_color_str}; border: 1px solid {accent_color}; color: {text_color};"); self.theme_bg_preview.setText(bg_color_str)
         self.theme_text_preview.setStyleSheet(f"background-color: {text_color}; border: 1px solid {accent_color};"); self.theme_text_preview.setText(text_color)
         self.theme_close_button_preview.setStyleSheet(f"background-color: {close_btn_hex}; border: 1px solid {text_color}44;"); self.theme_close_button_preview.setText(close_btn_hex)
         self.adjustSize()
+
+    def _apply_key_editor_styles(self):
+        """Apply theme-consistent styling directly to Key Editor widgets."""
+        if not hasattr(self, 'key_editor_text_edits'):
+            return
+        accent_color = getattr(self, '_theme_accent_color', '#E98973')
+        text_color = getattr(self, '_theme_text_color', '#FFFFFF')
+        bg_color_str = getattr(self, '_theme_bg_color_str', 'rgba(30,30,30,245)')
+
+        # Match the standard input look used by other fields
+        textedit_style = (
+            f"QTextEdit{{background-color: rgba(0,0,0,0.2); border: 1px solid {accent_color}88; "
+            f"border-radius: 5px; color: {text_color}; padding: 6px;}}\n"
+            f"QTextEdit:focus{{border-color: {accent_color};}}\n"
+            f"QTextEdit QAbstractScrollArea::viewport{{background-color: rgba(0,0,0,0.2);}}\n"
+            f"QTextEdit QWidget#qt_scrollarea_viewport{{background-color: rgba(0,0,0,0.2);}}\n"
+        )
+
+        group_style = (
+            f"QGroupBox{{border: 1px solid {accent_color}66; border-radius: 5px; margin-top: 1ex; "
+            f"color: {text_color}; font-weight: bold; padding: 6px; background-color: transparent;}}\n"
+            f"QGroupBox::title{{subcontrol-origin: margin; subcontrol-position: top center; padding: 0 3px; "
+            f"background-color: {bg_color_str};}}\n"
+        )
+
+        for pid, te in self.key_editor_text_edits.items():
+            try:
+                te.setStyleSheet(textedit_style)
+                te.viewport().setAutoFillBackground(False)
+            except Exception:
+                pass
+
+        # Style provider groupboxes if present
+        if hasattr(self, 'key_editor_container'):
+            for gb in self.key_editor_container.findChildren(QWidget):
+                if gb.metaObject().className() == 'QGroupBox' and gb.objectName() == 'key_editor_group':
+                    try:
+                        gb.setStyleSheet(group_style)
+                    except Exception:
+                        pass
 
     def _run_update_check_in_thread(self): status, message, details, _ = update.check_for_updates(); self.updateCheckCompleted.emit(status, message, details)
     def _on_update_check_completed(self, status, message, details):
