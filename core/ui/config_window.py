@@ -334,21 +334,15 @@ class ConfigWindow(PhysicsMovableWidget):
         if not hasattr(self, 'key_editor_text_edits') or not isinstance(self.key_editor_text_edits, dict):
             return
 
-        # Fallbacks
-        accent = accent_color or '#E98973'
-        text = text_color or '#FFFFFF'
-
-        # QLineEdit uses rgba(0,0,0,0.2) + border {accent}88 in the global stylesheet
-        te_style = (
-            f"QTextEdit{{background-color: rgba(0,0,0,0.2); border: 1px solid {accent}88; "
-            f"border-radius: 5px; color: {text}; padding: 5px;}}"
-            f"QTextEdit:focus{{border-color: {accent};}}"
-        )
-        viewport_style = "background-color: rgba(0,0,0,0.2);"
+        # Let the global stylesheet (same rules as QLineEdit) drive border/font/padding.
+        # We only force the *viewport* background because Qt often paints QTextEdit's
+        # viewport with a black palette base on Windows.
+        viewport_style = "background-color: rgba(0,0,0,0.2); border: none;"
 
         for pid, te in self.key_editor_text_edits.items():
             try:
-                te.setStyleSheet(te_style)
+                # Clear any old per-widget overrides so global theme stays consistent.
+                te.setStyleSheet("")
                 # Critical: Qt paints the viewport, not the outer QTextEdit
                 te.viewport().setStyleSheet(viewport_style)
             except Exception:
