@@ -217,11 +217,16 @@ class MainWindow(PhysicsMovableWidget):
             try:
                 with open(env_path, 'r', encoding='utf-8') as f:
                     for line in f:
-                        if line.strip().startswith('GOOGLE_API_KEY='):
-                            key_value = line.split('=', 1)[1].strip()
-                            if key_value:
-                                key_found = True
-                                break
+                        stripped = line.strip()
+                        if not stripped or stripped.startswith('#') or '=' not in stripped:
+                            continue
+                        k, v = stripped.split('=', 1)
+                        k = k.strip().upper()
+                        v = v.strip()
+                        # Support multi-key format: *_API_KEY, *_API_KEY_1, ... and legacy GOOGLE_API_KEY
+                        if (k.endswith('_API_KEY') or k.endswith('_API_KEY_1') or k.endswith('_API_KEY_2') or k == 'GOOGLE_API_KEY') and v:
+                            key_found = True
+                            break
             except Exception as e:
                 self.logger.console_log(f"Lỗi khi đọc file .env ban đầu: {e}")
 

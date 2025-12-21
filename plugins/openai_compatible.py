@@ -7,6 +7,7 @@ import os
 import json
 import base64
 import requests
+import re
 from typing import Optional, Dict, List, Any, Tuple
 from io import BytesIO
 
@@ -189,6 +190,153 @@ PROVIDERS = {
         "free_tier": False,
     }
 }
+
+
+# Base env var names for each provider (multi-key support uses numbered suffixes)
+PROVIDER_ENV_KEYS = {
+    'gemini': 'GEMINI_API_KEY',
+    'openrouter': 'OPENROUTER_API_KEY',
+    'groq': 'GROQ_API_KEY',
+    'github': 'GITHUB_API_KEY',
+    'cerebras': 'CEREBRAS_API_KEY',
+    'mistral': 'MISTRAL_API_KEY',
+    'cohere': 'COHERE_API_KEY',
+    'cloudflare': 'CLOUDFLARE_API_KEY',
+    'nvidia_nim': 'NVIDIA_API_KEY',
+    'sambanova': 'SAMBANOVA_API_KEY',
+    'huggingface': 'HUGGINGFACE_API_KEY',
+    'fireworks': 'FIREWORKS_API_KEY',
+    'together': 'TOGETHER_API_KEY',
+    'nebius': 'NEBIUS_API_KEY',
+    'novita': 'NOVITA_API_KEY',
+    'hyperbolic': 'HYPERBOLIC_API_KEY',
+    'scaleway': 'SCALEWAY_API_KEY',
+    'custom': 'CUSTOM_API_KEY',
+}
+
+
+def get_provider_env_key(provider: str) -> str:
+    """Get the base environment variable name for a provider's API key."""
+    return PROVIDER_ENV_KEYS.get(provider, f'{provider.upper()}_API_KEY')
+
+
+def _read_env_kv(env_filepath: str) -> Dict[str, str]:
+    kv: Dict[str, str] = {}
+    if not env_filepath or not os.path.exists(env_filepath):
+        return kv
+    try:
+        with open(env_filepath, 'r', encoding='utf-8') as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                k, v = line.split('=', 1)
+                k = k.strip()
+                v = v.strip()
+                if k:
+                    kv[k] = v
+    except Exception:
+        return kv
+    return kv
+
+
+def _write_env_kv(env_filepath: str, kv: Dict[str, str]):
+    os.makedirs(os.path.dirname(env_filepath), exist_ok=True)
+    with open(env_filepath, 'w', encoding='utf-8') as f:
+        for k, v in kv.items():
+            f.write(f'{k}={v}\n')
+
+
+def _dedupe_preserve_order(items: List[str]) -> List[str]:
+    seen = set()
+    out: List[str] = []
+    for item in items:
+        if not item:
+            continue
+        if item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
+def load_api_keys_by_provider(env_filepath: str) -> Dict[str, List[str]]:
+    """Load API keys from .env with multi-key support (KEY, KEY_1, KEY_2...)."""
+    kv = _read_env_kv(env_filepath)
+    keys_by_provider: Dict[str, List[str]] = {}
+
+    for provider_id in PROVIDERS.keys():
+        base = get_provider_env_key(provider_id)
+        numbered: List[Tuple[int, str]] = []
+        for k, v in kv.items():
+            m = re.fullmatch(re.escape(base) + r'_(\d+)', k)
+            if m and v:
+                numbered.append((int(m.group(1)), v))
+        numbered.sort(key=lambda t: t[0])
+
+        merged: List[str] = [v for _, v in numbered]
+
+        base_val = kv.get(base, '')
+        if base_val:
+            merged.append(base_val)
+
+        # Legacy keys for Gemini
+        if provider_id == 'gemini':
+            legacy = [kv.get('GOOGLE_API_KEY', ''), kv.get('API_KEY', '')]
+            merged.extend([k for k in legacy if k])
+
+        merged = _dedupe_preserve_order([x.strip() for x in merged if x and x.strip()])
+        if merged:
+            keys_by_provider[provider_id] = merged
+
+    return keys_by_provider
+
+
+def load_provider_api_keys(env_filepath: str, provider_id: str) -> List[str]:
+    return load_api_keys_by_provider(env_filepath).get(provider_id, [])
+
+
+def save_api_keys_by_provider(env_filepath: str, keys_by_provider: Dict[str, List[str]]):
+    """Write keys back to .env. For each provider, writes KEY_1..KEY_N and also KEY=KEY_1 for compatibility."""
+    kv = _read_env_kv(env_filepath)
+
+    # Remove all existing provider key entries (base + numbered + Gemini legacy alias)
+    for provider_id in PROVIDERS.keys():
+        base = get_provider_env_key(provider_id)
+        # Remove numbered keys
+        for k in list(kv.keys()):
+            if k == base or re.fullmatch(re.escape(base) + r'_(\d+)', k):
+                kv.pop(k, None)
+        if provider_id == 'gemini':
+            kv.pop('GOOGLE_API_KEY', None)
+
+    # Write new provider keys
+    for provider_id, raw_keys in (keys_by_provider or {}).items():
+        if provider_id not in PROVIDERS:
+            continue
+        base = get_provider_env_key(provider_id)
+        clean = _dedupe_preserve_order([k.strip() for k in (raw_keys or []) if k and k.strip()])
+        for i, key in enumerate(clean, start=1):
+            kv[f'{base}_{i}'] = key
+        if clean:
+            kv[base] = clean[0]
+            if provider_id == 'gemini':
+                kv['GOOGLE_API_KEY'] = clean[0]
+
+    _write_env_kv(env_filepath, kv)
+
+
+def add_api_key_to_env(env_filepath: str, provider_id: str, api_key: str) -> List[str]:
+    """Add a single API key to a provider list and persist to .env. Returns the updated list."""
+    api_key = (api_key or '').strip()
+    if not api_key:
+        return []
+    keys_by_provider = load_api_keys_by_provider(env_filepath)
+    current = keys_by_provider.get(provider_id, [])
+    current = _dedupe_preserve_order(current + [api_key])
+    keys_by_provider[provider_id] = current
+    save_api_keys_by_provider(env_filepath, keys_by_provider)
+    return current
 
 
 class OpenAICompatibleService:
@@ -729,47 +877,5 @@ def get_providers_with_api_keys(env_filepath: str = None) -> List[str]:
         # Default path: user/.env relative to this file's parent directory
         env_filepath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'user', '.env')
     
-    providers_with_keys = []
-    
-    # Map of env variable names to provider IDs
-    env_to_provider = {
-        'GEMINI_API_KEY': 'gemini',
-        'GOOGLE_API_KEY': 'gemini',  # Legacy support
-        'OPENROUTER_API_KEY': 'openrouter',
-        'GROQ_API_KEY': 'groq',
-        'GITHUB_API_KEY': 'github',
-        'CEREBRAS_API_KEY': 'cerebras',
-        'MISTRAL_API_KEY': 'mistral',
-        'COHERE_API_KEY': 'cohere',
-        'CLOUDFLARE_API_KEY': 'cloudflare',
-        'NVIDIA_API_KEY': 'nvidia_nim',
-        'SAMBANOVA_API_KEY': 'sambanova',
-        'HUGGINGFACE_API_KEY': 'huggingface',
-        'FIREWORKS_API_KEY': 'fireworks',
-        'TOGETHER_API_KEY': 'together',
-        'NEBIUS_API_KEY': 'nebius',
-        'NOVITA_API_KEY': 'novita',
-        'HYPERBOLIC_API_KEY': 'hyperbolic',
-        'SCALEWAY_API_KEY': 'scaleway',
-        'CUSTOM_API_KEY': 'custom',
-    }
-    
-    if not os.path.exists(env_filepath):
-        return providers_with_keys
-    
-    try:
-        with open(env_filepath, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if '=' in line and not line.startswith('#'):
-                    key, value = line.split('=', 1)
-                    key = key.strip()
-                    value = value.strip()
-                    if key in env_to_provider and value:
-                        provider_id = env_to_provider[key]
-                        if provider_id not in providers_with_keys:
-                            providers_with_keys.append(provider_id)
-    except Exception:
-        pass
-    
-    return providers_with_keys
+    keys_by_provider = load_api_keys_by_provider(env_filepath)
+    return [pid for pid, keys in keys_by_provider.items() if keys]

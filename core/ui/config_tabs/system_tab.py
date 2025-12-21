@@ -2,10 +2,30 @@
 from PySide6.QtWidgets import (QVBoxLayout, QWidget, QCheckBox, QLabel, QFrame,
                                QLineEdit, QPushButton, QHBoxLayout, QStackedWidget,
                                QComboBox, QGroupBox, QTextEdit, QScrollArea, QCompleter)
-from PySide6.QtGui import QDesktopServices
-from PySide6.QtCore import QUrl, Qt, QStringListModel
+from PySide6.QtGui import QDesktopServices, QIcon, QPixmap, QPainter
+from PySide6.QtCore import QUrl, Qt, QStringListModel, QByteArray
+
+try:
+    from PySide6.QtSvg import QSvgRenderer
+except Exception:
+    QSvgRenderer = None
 
 from plugins.openai_compatible import get_provider_list, PROVIDERS, get_providers_with_api_keys
+
+
+def _make_edit_icon() -> QIcon:
+    """Create a small pencil/edit icon from inline SVG."""
+    svg = """<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 20h9\"/><path d=\"M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z\"/></svg>"""
+    if QSvgRenderer is None:
+        # Fallback: empty icon (button can still show tooltip)
+        return QIcon()
+    renderer = QSvgRenderer(QByteArray(svg.encode('utf-8')))
+    pixmap = QPixmap(18, 18)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    renderer.render(painter)
+    painter.end()
+    return QIcon(pixmap)
 
 
 def populate_provider_combo(combo: QComboBox, recent_providers: list = None, providers_with_keys: list = None):
@@ -163,7 +183,26 @@ def create_system_tab(self: QWidget) -> QWidget:
 
     # --- Cột phải ---
     right_layout = QVBoxLayout()
-    right_layout.addWidget(QLabel("<b>Cài đặt Prompt & API</b>"))
+    
+    # Header with edit button
+    header_layout = QHBoxLayout()
+    header_layout.addWidget(QLabel("<b>Cài đặt Prompt & API</b>"))
+    header_layout.addStretch()
+    self.api_key_editor_toggle_btn = QPushButton()
+    self.api_key_editor_toggle_btn.setFixedSize(24, 24)
+    self.api_key_editor_toggle_btn.setToolTip("Mở Key Editor")
+    self.api_key_editor_toggle_btn.setCursor(Qt.PointingHandCursor)
+    self.api_key_editor_toggle_btn.setIcon(_make_edit_icon())
+    header_layout.addWidget(self.api_key_editor_toggle_btn)
+    right_layout.addLayout(header_layout)
+
+    # Stack: normal Prompt & API UI vs Key Editor
+    self.prompt_api_stack = QStackedWidget()
+
+    normal_page = QWidget()
+    normal_layout = QVBoxLayout(normal_page)
+    normal_layout.setContentsMargins(0, 0, 0, 0)
+    normal_layout.setSpacing(8)
     self.prompt_enabled_cb = QCheckBox("Bật prompt tùy chỉnh")
     self.custom_prompt_edit = QTextEdit()
     self.custom_prompt_edit.setPlaceholderText("Nhập prompt của bạn...")
@@ -213,18 +252,60 @@ def create_system_tab(self: QWidget) -> QWidget:
     self.gemini_model_combo = QComboBox()
     self.gemini_model_combo.setToolTip("Danh sách model sẽ được tự động lấy sau khi xác thực API key")
     
-    right_layout.addWidget(self.prompt_enabled_cb)
-    right_layout.addWidget(self.custom_prompt_edit)
-    right_layout.addWidget(self._create_line())
-    right_layout.addLayout(provider_header_layout)
-    right_layout.addWidget(self.provider_combo)
-    right_layout.addWidget(self.custom_base_url_label)
-    right_layout.addWidget(self.custom_base_url_edit)
-    right_layout.addWidget(self.api_key_label)
-    right_layout.addLayout(api_hbox)
-    right_layout.addWidget(self.api_key_status_label)
-    right_layout.addWidget(self.gemini_model_label)
-    right_layout.addWidget(self.gemini_model_combo)
-    right_layout.addStretch()
+    normal_layout.addWidget(self.prompt_enabled_cb)
+    normal_layout.addWidget(self.custom_prompt_edit)
+    normal_layout.addWidget(self._create_line())
+    normal_layout.addLayout(provider_header_layout)
+    normal_layout.addWidget(self.provider_combo)
+    normal_layout.addWidget(self.custom_base_url_label)
+    normal_layout.addWidget(self.custom_base_url_edit)
+    normal_layout.addWidget(self.api_key_label)
+    normal_layout.addLayout(api_hbox)
+    normal_layout.addWidget(self.api_key_status_label)
+    normal_layout.addWidget(self.gemini_model_label)
+    normal_layout.addWidget(self.gemini_model_combo)
+    normal_layout.addStretch()
+
+    # Key editor page
+    editor_page = QWidget()
+    editor_layout = QVBoxLayout(editor_page)
+    editor_layout.setContentsMargins(0, 0, 0, 0)
+    editor_layout.setSpacing(8)
+    editor_layout.addWidget(QLabel("<b>Key Editor</b>"))
+    editor_layout.addWidget(QLabel("Mỗi dòng là 1 API key. Lưu xong nhớ bấm 'Xác thực' ở provider bạn dùng để lấy model list."))
+
+    self.key_editor_scroll = QScrollArea()
+    self.key_editor_scroll.setWidgetResizable(True)
+    self.key_editor_container = QWidget()
+    self.key_editor_container_layout = QVBoxLayout(self.key_editor_container)
+    self.key_editor_container_layout.setContentsMargins(0, 0, 0, 0)
+    self.key_editor_container_layout.setSpacing(8)
+    self.key_editor_text_edits = {}
+
+    for p in get_provider_list():
+        pid = p.get('id')
+        pname = p.get('name', pid)
+        group = QGroupBox(pname)
+        gl = QVBoxLayout(group)
+        te = QTextEdit()
+        te.setPlaceholderText("key1\nkey2\n...")
+        te.setFixedHeight(80)
+        gl.addWidget(te)
+        self.key_editor_text_edits[pid] = te
+        self.key_editor_container_layout.addWidget(group)
+
+    self.key_editor_container_layout.addStretch()
+    self.key_editor_scroll.setWidget(self.key_editor_container)
+    editor_layout.addWidget(self.key_editor_scroll, stretch=1)
+
+    self.key_editor_status_label = QLabel("")
+    self.key_editor_status_label.setObjectName("api_key_status_label")
+    self.key_editor_save_button = QPushButton("Lưu Keys")
+    editor_layout.addWidget(self.key_editor_status_label)
+    editor_layout.addWidget(self.key_editor_save_button)
+
+    self.prompt_api_stack.addWidget(normal_page)
+    self.prompt_api_stack.addWidget(editor_page)
+    right_layout.addWidget(self.prompt_api_stack, stretch=1)
     
     return self._create_tab_content_widget(left_layout, right_layout)

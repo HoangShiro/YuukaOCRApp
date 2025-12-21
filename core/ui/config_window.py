@@ -11,7 +11,12 @@ from PySide6.QtCore import Qt, Signal, QEvent, QTimer, QElapsedTimer, QPointF, Q
 from core.physics import PhysicsMovableWidget
 from core import update
 from core.logging import Logger
-from plugins.openai_compatible import PROVIDERS, get_providers_with_api_keys
+from plugins.openai_compatible import (
+    PROVIDERS,
+    get_providers_with_api_keys,
+    load_api_keys_by_provider,
+    save_api_keys_by_provider,
+)
 
 from .themed_color_picker import ThemedColorDialog
 from .config_tabs.system_tab import create_system_tab, populate_provider_combo, populate_model_combo
@@ -128,6 +133,85 @@ class ConfigWindow(PhysicsMovableWidget):
         for param, (slider, label) in self.hook_sliders.items():
             slider.valueChanged.connect(lambda val, l=label: l.setText(str(val))); slider.sliderReleased.connect(self._emit_changes)
         self.updateCheckCompleted.connect(self._on_update_check_completed); self.ui_drop_zone.installEventFilter(self)
+
+        # Key Editor
+        if hasattr(self, 'api_key_editor_toggle_btn'):
+            self.api_key_editor_toggle_btn.clicked.connect(self._toggle_key_editor)
+        if hasattr(self, 'key_editor_save_button'):
+            self.key_editor_save_button.clicked.connect(self._save_key_editor)
+
+    def _get_env_filepath(self) -> str:
+        try:
+            parent = self.parent()
+            user_dir = getattr(parent, 'user_dir', os.path.dirname(os.path.dirname(__file__)))
+            return os.path.join(user_dir, '.env')
+        except Exception:
+            return os.path.join(os.path.dirname(os.path.dirname(__file__)), 'user', '.env')
+
+    def _toggle_key_editor(self):
+        if not hasattr(self, 'prompt_api_stack'):
+            return
+        # 0 = normal, 1 = editor
+        if self.prompt_api_stack.currentIndex() == 0:
+            self._load_key_editor_from_env()
+            self.prompt_api_stack.setCurrentIndex(1)
+            if hasattr(self, 'api_key_editor_toggle_btn'):
+                self.api_key_editor_toggle_btn.setToolTip("Quay lại Prompt & API")
+        else:
+            self.prompt_api_stack.setCurrentIndex(0)
+            if hasattr(self, 'api_key_editor_toggle_btn'):
+                self.api_key_editor_toggle_btn.setToolTip("Mở Key Editor")
+
+    def _load_key_editor_from_env(self):
+        if not hasattr(self, 'key_editor_text_edits'):
+            return
+        env_path = self._get_env_filepath()
+        keys_by_provider = load_api_keys_by_provider(env_path)
+        for pid, te in self.key_editor_text_edits.items():
+            keys = keys_by_provider.get(pid, [])
+            te.blockSignals(True)
+            te.setPlainText("\n".join(keys))
+            te.blockSignals(False)
+        if hasattr(self, 'key_editor_status_label'):
+            self.key_editor_status_label.setText("Đã tải keys từ .env")
+            self.key_editor_status_label.setStyleSheet("color: #aaa;")
+
+    def _save_key_editor(self):
+        if not hasattr(self, 'key_editor_text_edits'):
+            return
+        env_path = self._get_env_filepath()
+
+        keys_by_provider = {}
+        total = 0
+        for pid, te in self.key_editor_text_edits.items():
+            lines = [ln.strip() for ln in te.toPlainText().splitlines()]
+            keys = []
+            seen = set()
+            for k in lines:
+                if not k or k in seen:
+                    continue
+                seen.add(k)
+                keys.append(k)
+            if keys:
+                keys_by_provider[pid] = keys
+                total += len(keys)
+
+        save_api_keys_by_provider(env_path, keys_by_provider)
+
+        # Refresh provider combo key icons
+        self._providers_with_keys = get_providers_with_api_keys(env_path)
+        current_provider_id = self.provider_combo.currentData() if hasattr(self, 'provider_combo') else None
+        self.provider_combo.blockSignals(True)
+        populate_provider_combo(self.provider_combo, self._recent_providers, self._providers_with_keys)
+        if current_provider_id:
+            idx = self.provider_combo.findData(current_provider_id)
+            if idx >= 0:
+                self.provider_combo.setCurrentIndex(idx)
+        self.provider_combo.blockSignals(False)
+
+        if hasattr(self, 'key_editor_status_label'):
+            self.key_editor_status_label.setText(f"Đã lưu {total} key.")
+            self.key_editor_status_label.setStyleSheet("color: #77cc77;")
 
     def _create_line(self): line = QFrame(); line.setFrameShape(QFrame.Shape.HLine); line.setFrameShadow(QFrame.Shadow.Sunken); line.setObjectName("separator_line"); return line
     def _create_v_line(self): line = QFrame(); line.setFrameShape(QFrame.Shape.VLine); line.setFrameShadow(QFrame.Shadow.Sunken); line.setObjectName("separator_line"); return line
