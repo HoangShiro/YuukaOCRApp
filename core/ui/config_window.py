@@ -132,7 +132,10 @@ class ConfigWindow(PhysicsMovableWidget):
             slider.valueChanged.connect(lambda val, l=label, s=scale: l.setText(f"{val*s:.2f}")); slider.sliderReleased.connect(self._emit_changes)
         for param, (slider, label) in self.hook_sliders.items():
             slider.valueChanged.connect(lambda val, l=label: l.setText(str(val))); slider.sliderReleased.connect(self._emit_changes)
-        self.updateCheckCompleted.connect(self._on_update_check_completed); self.ui_drop_zone.installEventFilter(self)
+        self.updateCheckCompleted.connect(self._on_update_check_completed)
+        ui_drop_zone = getattr(self, 'ui_drop_zone', None)
+        if ui_drop_zone is not None:
+            ui_drop_zone.installEventFilter(self)
 
         # Key Editor
         if hasattr(self, 'api_key_editor_toggle_btn'):
@@ -156,74 +159,12 @@ class ConfigWindow(PhysicsMovableWidget):
             self._load_key_editor_from_env()
             self.prompt_api_stack.setCurrentIndex(1)
             self._apply_key_editor_input_style()
-            self._debug_key_editor_styles()
             if hasattr(self, 'api_key_editor_toggle_btn'):
                 self.api_key_editor_toggle_btn.setToolTip("Quay lại Prompt & API")
         else:
             self.prompt_api_stack.setCurrentIndex(0)
             if hasattr(self, 'api_key_editor_toggle_btn'):
                 self.api_key_editor_toggle_btn.setToolTip("Mở Key Editor")
-
-    def _debug_key_editor_styles(self):
-        """Print runtime style info for Key Editor inputs into the in-app console."""
-        if not self.logger:
-            return
-
-        # Compare against the normal single-line API key input if present
-        try:
-            le = getattr(self, 'api_key_edit', None)
-            if le is not None:
-                le_style = (le.styleSheet() or "").replace("\n", " ")
-                le_base = le.palette().color(le.palette().ColorRole.Base).name(QColor.NameFormat.HexArgb)
-                self.logger.console_log(
-                    f"[DEBUG] api_key_edit class={le.metaObject().className()} obj={le.objectName()} "
-                    f"pal_base={le_base} style_len={len(le_style)}"
-                )
-        except Exception as e:
-            self.logger.console_log(f"[DEBUG] api_key_edit error={e}")
-        if not hasattr(self, 'key_editor_text_edits') or not isinstance(self.key_editor_text_edits, dict):
-            self.logger.console_log("[DEBUG] Key Editor: key_editor_text_edits not found")
-            return
-
-        self.logger.console_log("[DEBUG] Key Editor: dumping QTextEdit styles...")
-        # Limit output to a few entries to avoid spam
-        shown = 0
-        for pid, te in self.key_editor_text_edits.items():
-            try:
-                vp = te.viewport()
-                te_name = te.objectName()
-                vp_name = vp.objectName()
-                te_style = (te.styleSheet() or "").replace("\n", " ")
-                vp_style = (vp.styleSheet() or "").replace("\n", " ")
-                # Palette base colors (where Qt paints background)
-                te_base = te.palette().color(te.palette().ColorRole.Base).name(QColor.NameFormat.HexArgb)
-                vp_base = vp.palette().color(vp.palette().ColorRole.Base).name(QColor.NameFormat.HexArgb)
-
-                frame_info = ""
-                try:
-                    frame = None
-                    if hasattr(self, 'key_editor_text_to_frame') and isinstance(self.key_editor_text_to_frame, dict):
-                        frame = self.key_editor_text_to_frame.get(te)
-                    if frame is not None:
-                        frame_style = (frame.styleSheet() or "").replace("\n", " ")
-                        frame_info = (
-                            f" frame_obj={frame.objectName()} frame_style_len={len(frame_style)}"
-                            f" frame_autofill={frame.autoFillBackground()}"
-                            f" frame_styled={frame.testAttribute(Qt.WA_StyledBackground)}"
-                        )
-                except Exception:
-                    frame_info = ""
-
-                self.logger.console_log(
-                    f"[DEBUG] provider={pid} class={te.metaObject().className()} obj={te_name} "
-                    f"viewport_obj={vp_name} pal_base={te_base} vp_pal_base={vp_base} "
-                    f"style_len={len(te_style)} vp_style_len={len(vp_style)}{frame_info}"
-                )
-            except Exception as e:
-                self.logger.console_log(f"[DEBUG] provider={pid} error={e}")
-            shown += 1
-            if shown >= 5:
-                break
 
     def _load_key_editor_from_env(self):
         if not hasattr(self, 'key_editor_text_edits'):
