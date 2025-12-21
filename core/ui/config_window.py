@@ -155,6 +155,7 @@ class ConfigWindow(PhysicsMovableWidget):
         if self.prompt_api_stack.currentIndex() == 0:
             self._load_key_editor_from_env()
             self.prompt_api_stack.setCurrentIndex(1)
+            self._apply_key_editor_input_style()
             self._debug_key_editor_styles()
             if hasattr(self, 'api_key_editor_toggle_btn'):
                 self.api_key_editor_toggle_btn.setToolTip("Quay lại Prompt & API")
@@ -180,13 +181,14 @@ class ConfigWindow(PhysicsMovableWidget):
                 te_name = te.objectName()
                 vp_name = vp.objectName()
                 te_style = (te.styleSheet() or "").replace("\n", " ")
+                vp_style = (vp.styleSheet() or "").replace("\n", " ")
                 # Palette base colors (where Qt paints background)
                 te_base = te.palette().color(te.palette().ColorRole.Base).name(QColor.NameFormat.HexArgb)
                 vp_base = vp.palette().color(vp.palette().ColorRole.Base).name(QColor.NameFormat.HexArgb)
                 self.logger.console_log(
                     f"[DEBUG] provider={pid} class={te.metaObject().className()} obj={te_name} "
                     f"viewport_obj={vp_name} pal_base={te_base} vp_pal_base={vp_base} "
-                    f"style_len={len(te_style)}"
+                    f"style_len={len(te_style)} vp_style_len={len(vp_style)}"
                 )
             except Exception as e:
                 self.logger.console_log(f"[DEBUG] provider={pid} error={e}")
@@ -318,11 +320,39 @@ class ConfigWindow(PhysicsMovableWidget):
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
         """)
 
+        # Ensure Key Editor inputs always match the single API key input look
+        self._apply_key_editor_input_style(accent_color, text_color)
+
         self.theme_accent_preview.setStyleSheet(f"background-color: {accent_color}; border: 1px solid {text_color}44; color: {text_color};"); self.theme_accent_preview.setText(accent_color)
         self.theme_bg_preview.setStyleSheet(f"background-color: {bg_color_str}; border: 1px solid {accent_color}; color: {text_color};"); self.theme_bg_preview.setText(bg_color_str)
         self.theme_text_preview.setStyleSheet(f"background-color: {text_color}; border: 1px solid {accent_color};"); self.theme_text_preview.setText(text_color)
         self.theme_close_button_preview.setStyleSheet(f"background-color: {close_btn_hex}; border: 1px solid {text_color}44;"); self.theme_close_button_preview.setText(close_btn_hex)
         self.adjustSize()
+
+    def _apply_key_editor_input_style(self, accent_color: str = None, text_color: str = None):
+        """Make Key Editor QTextEdit look like the single-line API key input (QLineEdit)."""
+        if not hasattr(self, 'key_editor_text_edits') or not isinstance(self.key_editor_text_edits, dict):
+            return
+
+        # Fallbacks
+        accent = accent_color or '#E98973'
+        text = text_color or '#FFFFFF'
+
+        # QLineEdit uses rgba(0,0,0,0.2) + border {accent}88 in the global stylesheet
+        te_style = (
+            f"QTextEdit{{background-color: rgba(0,0,0,0.2); border: 1px solid {accent}88; "
+            f"border-radius: 5px; color: {text}; padding: 5px;}}"
+            f"QTextEdit:focus{{border-color: {accent};}}"
+        )
+        viewport_style = "background-color: rgba(0,0,0,0.2);"
+
+        for pid, te in self.key_editor_text_edits.items():
+            try:
+                te.setStyleSheet(te_style)
+                # Critical: Qt paints the viewport, not the outer QTextEdit
+                te.viewport().setStyleSheet(viewport_style)
+            except Exception:
+                continue
 
     def _run_update_check_in_thread(self): status, message, details, _ = update.check_for_updates(); self.updateCheckCompleted.emit(status, message, details)
     def _on_update_check_completed(self, status, message, details):

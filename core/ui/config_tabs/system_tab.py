@@ -292,8 +292,7 @@ def create_system_tab(self: QWidget) -> QWidget:
         group.setObjectName("key_editor_group")
         gl = QVBoxLayout(group)
         te = QTextEdit()
-        # Reuse existing QTextEdit styling from other tabs
-        te.setObjectName("updateDetailsLabel")
+        te.setObjectName("key_editor_text")
         te.setPlaceholderText("key1\nkey2\n...")
         te.setFixedHeight(80)
         gl.addWidget(te)
