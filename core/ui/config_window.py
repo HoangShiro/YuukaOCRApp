@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QWidget, QApplication, QCheckBox, QLabel, QFrame,
                                QLineEdit, QPushButton, QHBoxLayout,
                                QFontComboBox, QSpinBox, QSlider, QButtonGroup,
                                QFileDialog, QStackedWidget, QComboBox, QVBoxLayout, QTextEdit)
-from PySide6.QtGui import QColor, QFont, QDragEnterEvent, QMouseEvent, QKeyEvent, QPixmap, QHideEvent, QShowEvent, QTextCursor, QDesktopServices
+from PySide6.QtGui import QColor, QFont, QPalette, QDragEnterEvent, QMouseEvent, QKeyEvent, QPixmap, QHideEvent, QShowEvent, QTextCursor, QDesktopServices
 from PySide6.QtCore import Qt, Signal, QEvent, QTimer, QElapsedTimer, QPointF, QUrl
 
 from core.physics import PhysicsMovableWidget
@@ -285,6 +285,27 @@ class ConfigWindow(PhysicsMovableWidget):
             QScrollBar::handle:horizontal:hover {{ background: {accent_color}bb; }}
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
         """)
+
+        # Key Editor: force the same look as the single API key input (QLineEdit)
+        # We use palette + per-widget stylesheet to avoid Qt viewport quirks on Windows.
+        if hasattr(self, 'key_editor_text_edits') and isinstance(self.key_editor_text_edits, dict):
+            base_bg = QColor(0, 0, 0, 51)  # ~= rgba(0,0,0,0.2)
+            text_qcolor = QColor(text_color)
+            for te in self.key_editor_text_edits.values():
+                try:
+                    pal = te.palette()
+                    pal.setColor(QPalette.ColorRole.Base, base_bg)
+                    pal.setColor(QPalette.ColorRole.Text, text_qcolor)
+                    te.setPalette(pal)
+                    te.setAutoFillBackground(True)
+                    te.setStyleSheet(
+                        f"QTextEdit{{background-color: rgba(0,0,0,0.2); border: 1px solid {accent_color}88; "
+                        f"border-radius: 5px; color: {text_color}; padding: 5px;}}"
+                        f"QTextEdit:focus{{border-color: {accent_color};}}"
+                    )
+                except Exception:
+                    pass
+
         self.theme_accent_preview.setStyleSheet(f"background-color: {accent_color}; border: 1px solid {text_color}44; color: {text_color};"); self.theme_accent_preview.setText(accent_color)
         self.theme_bg_preview.setStyleSheet(f"background-color: {bg_color_str}; border: 1px solid {accent_color}; color: {text_color};"); self.theme_bg_preview.setText(bg_color_str)
         self.theme_text_preview.setStyleSheet(f"background-color: {text_color}; border: 1px solid {accent_color};"); self.theme_text_preview.setText(text_color)
