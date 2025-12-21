@@ -198,10 +198,26 @@ class ConfigWindow(PhysicsMovableWidget):
                 # Palette base colors (where Qt paints background)
                 te_base = te.palette().color(te.palette().ColorRole.Base).name(QColor.NameFormat.HexArgb)
                 vp_base = vp.palette().color(vp.palette().ColorRole.Base).name(QColor.NameFormat.HexArgb)
+
+                frame_info = ""
+                try:
+                    frame = None
+                    if hasattr(self, 'key_editor_text_to_frame') and isinstance(self.key_editor_text_to_frame, dict):
+                        frame = self.key_editor_text_to_frame.get(te)
+                    if frame is not None:
+                        frame_style = (frame.styleSheet() or "").replace("\n", " ")
+                        frame_info = (
+                            f" frame_obj={frame.objectName()} frame_style_len={len(frame_style)}"
+                            f" frame_autofill={frame.autoFillBackground()}"
+                            f" frame_styled={frame.testAttribute(Qt.WA_StyledBackground)}"
+                        )
+                except Exception:
+                    frame_info = ""
+
                 self.logger.console_log(
                     f"[DEBUG] provider={pid} class={te.metaObject().className()} obj={te_name} "
                     f"viewport_obj={vp_name} pal_base={te_base} vp_pal_base={vp_base} "
-                    f"style_len={len(te_style)} vp_style_len={len(vp_style)}"
+                    f"style_len={len(te_style)} vp_style_len={len(vp_style)}{frame_info}"
                 )
             except Exception as e:
                 self.logger.console_log(f"[DEBUG] provider={pid} error={e}")
@@ -357,6 +373,8 @@ class ConfigWindow(PhysicsMovableWidget):
         if not hasattr(self, 'key_editor_text_edits') or not isinstance(self.key_editor_text_edits, dict):
             return
 
+        accent = accent_color or getattr(self, '_last_accent_color', None) or '#E98973'
+
         # Key Editor inputs are now wrapped in a styled QFrame. Ensure the QTextEdit + viewport stay transparent.
         viewport_style = "background: transparent; border: none;"
 
@@ -374,11 +392,24 @@ class ConfigWindow(PhysicsMovableWidget):
         # Ensure wrapper frames paint their background (some Windows styles require this)
         try:
             if hasattr(self, 'key_editor_text_to_frame') and isinstance(self.key_editor_text_to_frame, dict):
+                frame_qss = (
+                    "QFrame#key_editor_input_frame {"
+                    "  background-color: rgba(0,0,0,0.2);"
+                    f"  border: 1px solid {accent}88;"
+                    "  border-radius: 5px;"
+                    "}"
+                    "QFrame#key_editor_input_frame[focused=\"true\"] {"
+                    f"  border-color: {accent};"
+                    "}"
+                )
+
                 for frame in self.key_editor_text_to_frame.values():
                     if frame is None:
                         continue
                     frame.setAttribute(Qt.WA_StyledBackground, True)
                     frame.setAutoFillBackground(True)
+                    # Set directly on the frame to avoid any inherited-QSS edge cases.
+                    frame.setStyleSheet(frame_qss)
                     frame.style().unpolish(frame); frame.style().polish(frame); frame.update()
         except Exception:
             pass
